@@ -84,6 +84,9 @@ python sap_merge.py
 
 ```
 SAP-CSV-Merger/
+├── .github/workflows/    # GitHub Actions automation
+│   ├── ci.yml            # Build verification on push/PR
+│   └── release.yml       # Automated release on tag push
 ├── sap_merge.py          # Main application logic & GUI
 ├── theme.py              # Colors, typography, spacing tokens
 ├── CONTEXT.md            # Business context & requirements
@@ -150,6 +153,46 @@ pyinstaller sap_csv_merger.spec --clean
 
 # Output: dist/SAP_CSV_Merger/SAP_CSV_Merger.exe
 ```
+
+---
+
+## 🚀 Release Process
+
+This project uses GitHub Actions to automate releases.
+
+### Creating a Release
+
+1. **Update version** in `installer.iss` (`#define MyAppVersion`)
+2. **Commit changes**
+3. **Create and push a tag:**
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+4. **GitHub Actions automatically:**
+   - Builds the Windows executable with PyInstaller
+   - Creates a ZIP archive
+   - Publishes a GitHub Release with both files
+
+### Manual Build (without GitHub Actions)
+
+```bash
+# Build executable
+pyinstaller sap_csv_merger.spec --clean
+
+# Create ZIP (PowerShell)
+Compress-Archive -Path dist/SAP_CSV_Merger -DestinationPath SAP_CSV_Merger.zip
+```
+
+### Inno Setup Installer (Optional)
+
+To create the `.exe` installer:
+1. Install [Inno Setup](https://jrsoftware.org/isinfo.php)
+2. Open `installer.iss` in Inno Setup
+3. Click **Build → Compile**
+4. Output: `installer/SAP_CSV_Merger_Setup_1.0.0.exe`
+
+> **Note:** Inno Setup is not included in GitHub Actions workflow due to licensing. Build the installer locally if needed.
 
 ---
 

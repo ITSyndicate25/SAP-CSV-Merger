@@ -9,3 +9,5 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+installer/
+SAP_CSV_Merger.zip
