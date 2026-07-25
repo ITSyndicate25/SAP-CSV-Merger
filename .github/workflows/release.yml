@@ -120,6 +120,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            dist/SAP_CSV_Merger/SAP_CSV_Merger.exe
+            dist/SAP_CSV_Merger.exe
           body: |
             ${{ steps.changelog.outputs.changelog }}
