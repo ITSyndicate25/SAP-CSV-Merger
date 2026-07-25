@@ -65,7 +65,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -970,18 +970,20 @@ class SAPMergerApp:
 
         def _check():
             checker = UpdateChecker(APP_VERSION)
-            result = checker.check()
-            self.root.after(0, self._handle_update_result, result, silent)
+            result, error = checker.check()
+            self.root.after(0, self._handle_update_result, result, error, silent)
 
         threading.Thread(target=_check, daemon=True).start()
 
-    def _handle_update_result(self, result: dict | None, silent: bool):
+    def _handle_update_result(
+        self, result: dict | None, error: str | None, silent: bool
+    ):
         if result is None:
             if not silent:
-                messagebox.showinfo(
-                    "Update Check",
-                    "Could not check for updates. Check your internet connection.",
-                )
+                msg = "Could not check for updates."
+                if error:
+                    msg += f"\n\nError: {error}"
+                messagebox.showinfo("Update Check", msg)
             return
         if result["update_available"]:
             self._show_update_dialog(result)
@@ -1054,16 +1056,32 @@ class UpdateChecker:
     def __init__(self, current_version: str):
         self.current_version = current_version
 
-    def check(self) -> dict | None:
-        """Fetch latest release from GitHub API. Returns dict or None on failure."""
+    def check(self) -> tuple[dict | None, str | None]:
+        """Fetch latest release from GitHub API.
+
+        Returns:
+            Tuple of (result_dict, error_message). result_dict is None on failure.
+        """
         import urllib.request
         import json
+        import ssl
 
         try:
+            # Handle SSL certificates in PyInstaller bundles
+            ssl_context = ssl.create_default_context()
+            try:
+                import certifi
+
+                ssl_context.load_verify_locations(certifi.where())
+            except ImportError:
+                pass  # Use system certs if certifi not available
+
             req = urllib.request.Request(
                 self.GITHUB_API, headers={"Accept": "application/vnd.github.v3+json"}
             )
-            with urllib.request.urlopen(req, timeout=5) as response:
+            with urllib.request.urlopen(
+                req, timeout=10, context=ssl_context
+            ) as response:
                 data = json.loads(response.read().decode())
 
                 tag_name = data.get("tag_name", "")
@@ -1076,14 +1094,17 @@ class UpdateChecker:
 
                 update_available = latest > current
 
-                return {
-                    "update_available": update_available,
-                    "latest_version": latest_version,
-                    "release_url": release_url,
-                    "release_notes": release_notes,
-                }
-        except Exception:
-            return None
+                return (
+                    {
+                        "update_available": update_available,
+                        "latest_version": latest_version,
+                        "release_url": release_url,
+                        "release_notes": release_notes,
+                    },
+                    None,
+                )
+        except Exception as e:
+            return (None, str(e))
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────

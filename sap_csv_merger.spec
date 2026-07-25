@@ -1,13 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all
+
 block_cipher = None
+
+certifi_datas, certifi_binaries, certifi_hiddenimports = collect_all('certifi')
 
 a = Analysis(
     ['sap_merge.py'],
     pathex=[],
-    binaries=[],
-    datas=[('theme.py', '.'), ('fujifilm_bg.png', '.')],
-    hiddenimports=['tkinter', 'csv', 'pathlib', 'datetime', 'os', 'shutil'],
+    binaries=certifi_binaries,
+    datas=[('theme.py', '.'), ('fujifilm_bg.png', '.')] + certifi_datas,
+    hiddenimports=['tkinter', 'csv', 'pathlib', 'datetime', 'os', 'shutil'] + certifi_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
