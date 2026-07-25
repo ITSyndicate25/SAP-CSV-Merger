@@ -100,7 +100,7 @@ echo echo This will uninstall SAP CSV Merger from your computer.
 echo echo.
 echo if /I "%%1"=="/S" goto uninstall
 echo set /p "CONFIRM=Are you sure you want to uninstall? (Y/N): "
-echo if /I not "%%CONFIRM%"=="Y" (
+echo if /I not "%%CONFIRM%%"=="Y" (
 echo     echo Uninstall cancelled.
 echo     pause
 echo     exit /b 0
