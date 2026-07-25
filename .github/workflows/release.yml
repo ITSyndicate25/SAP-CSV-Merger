@@ -25,7 +25,6 @@ jobs:
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files
-        continue-on-error: true
 
       - name: Install PyInstaller
         run: pip install pyinstaller
@@ -40,28 +39,28 @@ jobs:
           # Get previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           FIRST_COMMIT=$(git rev-list --max-parents=0 HEAD | head -1)
-          
+
           # Collect commits since last tag
           if [ -z "$PREV_TAG" ]; then
             COMMITS=$(git log --pretty=format:"%s|||%h" HEAD)
           else
             COMMITS=$(git log --pretty=format:"%s|||%h" ${PREV_TAG}..HEAD)
           fi
-          
+
           # Initialize temp files for each section
           FEATURES_FILE=$(mktemp)
           FIXES_FILE=$(mktemp)
           CI_FILE=$(mktemp)
           CHORE_FILE=$(mktemp)
           OTHER_FILE=$(mktemp)
-          
+
           # Categorize each commit into temp files
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             MSG=$(echo "$line" | cut -d'|' -f1)
             HASH=$(echo "$line" | cut -d'|' -f4)
             ENTRY="- ${MSG} (${HASH})"
-            
+
             case "$MSG" in
               feat*)  echo "$ENTRY" >> "$FEATURES_FILE" ;;
               fix*)   echo "$ENTRY" >> "$FIXES_FILE" ;;
@@ -70,47 +69,47 @@ jobs:
               *)      echo "$ENTRY" >> "$OTHER_FILE" ;;
             esac
           done <<< "$COMMITS"
-          
+
           # Build markdown
           echo "# What's Changed" > CHANGELOG.md
           echo "" >> CHANGELOG.md
-          
+
           if [ -s "$FEATURES_FILE" ]; then
             echo "## 🚀 Features" >> CHANGELOG.md
             cat "$FEATURES_FILE" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
-          
+
           if [ -s "$FIXES_FILE" ]; then
             echo "## 🐛 Bug Fixes" >> CHANGELOG.md
             cat "$FIXES_FILE" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
-          
+
           if [ -s "$CI_FILE" ]; then
             echo "## ⚙️ CI/CD" >> CHANGELOG.md
             cat "$CI_FILE" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
-          
+
           if [ -s "$CHORE_FILE" ]; then
             echo "## 🔧 Maintenance" >> CHANGELOG.md
             cat "$CHORE_FILE" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
-          
+
           if [ -s "$OTHER_FILE" ]; then
             echo "## 📝 Other Changes" >> CHANGELOG.md
             cat "$OTHER_FILE" >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
-          
+
           echo "---" >> CHANGELOG.md
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-$FIRST_COMMIT}...${{ github.ref_name }}" >> CHANGELOG.md
-          
+
           # Cleanup
           rm -f "$FEATURES_FILE" "$FIXES_FILE" "$CI_FILE" "$CHORE_FILE" "$OTHER_FILE"
-          
+
           # Read changelog content
           CHANGELOG_CONTENT=$(cat CHANGELOG.md)
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
