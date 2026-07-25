@@ -37,8 +37,6 @@ SYNTHETIC_HEADERS = [
     "D",
     "E",
     "F",
-    "G",
-    "H",
     "I",
     "J",
     "K",
@@ -65,7 +63,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -1048,9 +1046,7 @@ class SAPMergerApp:
 class UpdateChecker:
     """Checks GitHub for newer releases and reports availability."""
 
-    GITHUB_API = (
-        "https://api.github.com/repos/ITSyndicate25/SAP-CSV-Merger/releases/latest"
-    )
+    GITHUB_API = "https://api.github.com/repos/ITSyndicate25/SAP-CSV-Merger/releases"
     GITHUB_RELEASES_PAGE = "https://github.com/ITSyndicate25/SAP-CSV-Merger/releases"
 
     def __init__(self, current_version: str):
@@ -1082,12 +1078,22 @@ class UpdateChecker:
             with urllib.request.urlopen(
                 req, timeout=10, context=ssl_context
             ) as response:
-                data = json.loads(response.read().decode())
+                releases = json.loads(response.read().decode())
 
-                tag_name = data.get("tag_name", "")
+                # Pick the first non-draft, non-prerelease release
+                latest_release = None
+                for r in releases:
+                    if not r.get("draft", True) and not r.get("prerelease", True):
+                        latest_release = r
+                        break
+
+                if latest_release is None:
+                    return (None, "No stable release found on GitHub.")
+
+                tag_name = latest_release.get("tag_name", "")
                 latest_version = tag_name.lstrip("v")
-                release_url = data.get("html_url", self.GITHUB_RELEASES_PAGE)
-                release_notes = data.get("body", "")
+                release_url = latest_release.get("html_url", self.GITHUB_RELEASES_PAGE)
+                release_notes = latest_release.get("body", "")
 
                 current = tuple(int(x) for x in self.current_version.split("."))
                 latest = tuple(int(x) for x in latest_version.split("."))
@@ -1105,9 +1111,6 @@ class UpdateChecker:
                 )
         except Exception as e:
             return (None, str(e))
-
-
-# ─── Entry Point ──────────────────────────────────────────────────────────────
 
 
 def main():
