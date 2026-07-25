@@ -37,8 +37,6 @@ SYNTHETIC_HEADERS = [
     "D",
     "E",
     "F",
-    "G",
-    "H",
     "I",
     "J",
     "K",
@@ -65,7 +63,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.9"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -1048,23 +1046,23 @@ class SAPMergerApp:
 class UpdateChecker:
     """Checks GitHub for newer releases and reports availability."""
 
-    GITHUB_API = (
-        "https://api.github.com/repos/ITSyndicate25/SAP-CSV-Merger/releases/latest"
-    )
     GITHUB_RELEASES_PAGE = "https://github.com/ITSyndicate25/SAP-CSV-Merger/releases"
 
     def __init__(self, current_version: str):
         self.current_version = current_version
 
     def check(self) -> tuple[dict | None, str | None]:
-        """Fetch latest release from GitHub API.
+        """Fetch latest release from GitHub releases page.
+
+        Uses the HTML page (no auth required) instead of the GitHub REST API,
+        which returns 404 for unauthenticated requests on this repo.
 
         Returns:
             Tuple of (result_dict, error_message). result_dict is None on failure.
         """
         import urllib.request
-        import json
         import ssl
+        import re
 
         try:
             # Handle SSL certificates in PyInstaller bundles
@@ -1077,37 +1075,42 @@ class UpdateChecker:
                 pass  # Use system certs if certifi not available
 
             req = urllib.request.Request(
-                self.GITHUB_API, headers={"Accept": "application/vnd.github.v3+json"}
+                self.GITHUB_RELEASES_PAGE,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; SAPCSVMerger/1.0)"},
             )
             with urllib.request.urlopen(
                 req, timeout=10, context=ssl_context
             ) as response:
-                data = json.loads(response.read().decode())
+                html = response.read().decode("utf-8", errors="replace")
 
-                tag_name = data.get("tag_name", "")
-                latest_version = tag_name.lstrip("v")
-                release_url = data.get("html_url", self.GITHUB_RELEASES_PAGE)
-                release_notes = data.get("body", "")
+            # Parse latest release tag from HTML
+            # Looks for: /ITSyndicate25/SAP-CSV-Merger/releases/tag/v1.X.X
+            match = re.search(
+                r"/ITSyndicate25/SAP-CSV-Merger/releases/tag/v(\d+\.\d+\.\d+)",
+                html,
+            )
+            if not match:
+                return (None, "No release found on GitHub.")
 
-                current = tuple(int(x) for x in self.current_version.split("."))
-                latest = tuple(int(x) for x in latest_version.split("."))
+            latest_version = match.group(1)
+            release_url = f"{self.GITHUB_RELEASES_PAGE}/tag/v{latest_version}"
 
-                update_available = latest > current
+            current = tuple(int(x) for x in self.current_version.split("."))
+            latest = tuple(int(x) for x in latest_version.split("."))
 
-                return (
-                    {
-                        "update_available": update_available,
-                        "latest_version": latest_version,
-                        "release_url": release_url,
-                        "release_notes": release_notes,
-                    },
-                    None,
-                )
+            update_available = latest > current
+
+            return (
+                {
+                    "update_available": update_available,
+                    "latest_version": latest_version,
+                    "release_url": release_url,
+                    "release_notes": "",
+                },
+                None,
+            )
         except Exception as e:
             return (None, str(e))
-
-
-# ─── Entry Point ──────────────────────────────────────────────────────────────
 
 
 def main():
