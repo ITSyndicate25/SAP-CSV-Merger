@@ -63,7 +63,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.11"
+APP_VERSION = "1.0.12"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -1095,9 +1095,9 @@ class UpdateChecker:
         self.current_version = current_version
 
     def check(self) -> tuple[dict | None, str | None]:
-        """Check GitHub releases using the redirect-based method.
+        """Check GitHub releases using the releases/latest redirect.
 
-        GET /releases/latest returns a redirect to the actual release page URL.
+        GET /releases/latest follows the redirect to the actual release page.
         For private repos this returns 404, which we detect and guide the user.
 
         Returns:
@@ -1106,6 +1106,7 @@ class UpdateChecker:
         import urllib.request
         import urllib.error
         import ssl
+        import re
 
         try:
             # Handle SSL certificates in PyInstaller bundles
@@ -1117,50 +1118,35 @@ class UpdateChecker:
             except ImportError:
                 pass  # Use system certs if certifi not available
 
-            # Use the releases/latest path which redirects to the latest tag
-            # Works for public repos without auth
+            # Fetch /releases/latest — follows redirect to actual release page
             url = f"{self.GITHUB_RELEASES_PAGE}/latest"
             req = urllib.request.Request(
                 url,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; SAPCSVMerger/1.0)"},
             )
+            with urllib.request.urlopen(
+                req, timeout=10, context=ssl_context
+            ) as response:
+                # After following redirects, geturl() gives the final destination
+                final_url = response.geturl()
 
-            # Disable redirect handling so we catch the redirect itself
-            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-                def redirect_request(self, req, fp, code, msg, headers, newurl):
-                    return None  # Stop at redirect, return it
+            # Extract tag from the final URL: .../releases/tag/vX.Y.Z
+            match = re.search(r"/tag/v(\d+\.\d+\.\d+)", final_url)
+            if match:
+                latest_version = match.group(1)
+                current = tuple(int(x) for x in self.current_version.split("."))
+                latest = tuple(int(x) for x in latest_version.split("."))
+                return (
+                    {
+                        "update_available": latest > current,
+                        "latest_version": latest_version,
+                        "release_url": final_url,
+                        "release_notes": "",
+                    },
+                    None,
+                )
 
-            opener = urllib.request.build_opener(NoRedirectHandler)
-            with opener.open(req, timeout=10, context=ssl_context) as response:
-                status = response.getcode()
-
-                # 302 redirect = found a latest release
-                if status in (301, 302, 303, 307, 308):
-                    final_url = response.headers.get("Location", "")
-                    # Extract tag from URL like .../releases/tag/vX.Y.Z
-                    import re
-
-                    match = re.search(r"/tag/v(\d+\.\d+\.\d+)", final_url)
-                    if match:
-                        latest_version = match.group(1)
-                        current = tuple(int(x) for x in self.current_version.split("."))
-                        latest = tuple(int(x) for x in latest_version.split("."))
-
-                        return (
-                            {
-                                "update_available": latest > current,
-                                "latest_version": latest_version,
-                                "release_url": final_url,
-                                "release_notes": "",
-                            },
-                            None,
-                        )
-
-                # 404 = private repo or no releases yet
-                if status == 404:
-                    return (None, "Private repository — open the page in your browser.")
-
-                return (None, f"Unexpected HTTP {status}")
+            return (None, "Could not determine latest version from GitHub.")
 
         except urllib.error.HTTPError as e:
             if e.code == 404:
