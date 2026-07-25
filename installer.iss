@@ -2,7 +2,7 @@
 ; Download Inno Setup from: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "SAP CSV Merger"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.0.10"
 #define MyAppPublisher "ITSyndicate25"
 #define MyAppExeName "SAP_CSV_Merger.exe"
 

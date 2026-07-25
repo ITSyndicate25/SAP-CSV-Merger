@@ -63,7 +63,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.0.10"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -978,10 +978,13 @@ class SAPMergerApp:
     ):
         if result is None:
             if not silent:
-                msg = "Could not check for updates."
-                if error:
-                    msg += f"\n\nError: {error}"
-                messagebox.showinfo("Update Check", msg)
+                if error and "Private repository" in error:
+                    self._show_private_repo_dialog()
+                else:
+                    msg = "Could not check for updates."
+                    if error:
+                        msg += f"\n\nError: {error}"
+                    messagebox.showinfo("Update Check", msg)
             return
         if result["update_available"]:
             self._show_update_dialog(result)
@@ -989,6 +992,47 @@ class SAPMergerApp:
             messagebox.showinfo(
                 "Up to Date", f"You're running the latest version ({APP_VERSION})."
             )
+
+    def _show_private_repo_dialog(self):
+        """Show dialog for private repo — let user open releases page manually."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Update Check")
+        dialog.geometry("480x200")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="Update Check",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(pady=(0, 10))
+
+        ttk.Label(
+            frame,
+            text="This repository is private. GitHub requires you to be\n"
+            "signed in to check for updates.\n\n"
+            "Open the releases page in your browser to see available versions.",
+            justify=tk.LEFT,
+        ).pack(pady=(0, 15))
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack()
+
+        ttk.Button(
+            btn_frame,
+            text="Open Releases Page",
+            command=lambda: (
+                webbrowser.open(UpdateChecker.GITHUB_RELEASES_PAGE),
+                dialog.destroy(),
+            ),
+        ).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="OK", command=dialog.destroy).pack(
+            side=tk.LEFT, padx=5
+        )
 
     def _show_update_dialog(self, info: dict):
         """Show a custom update-available dialog with download button."""
@@ -1052,17 +1096,16 @@ class UpdateChecker:
         self.current_version = current_version
 
     def check(self) -> tuple[dict | None, str | None]:
-        """Fetch latest release from GitHub releases page.
+        """Check GitHub releases using the redirect-based method.
 
-        Uses the HTML page (no auth required) instead of the GitHub REST API,
-        which returns 404 for unauthenticated requests on this repo.
+        GET /releases/latest returns a redirect to the actual release page URL.
+        For private repos this returns 404, which we detect and guide the user.
 
         Returns:
             Tuple of (result_dict, error_message). result_dict is None on failure.
         """
         import urllib.request
         import ssl
-        import re
 
         try:
             # Handle SSL certificates in PyInstaller bundles
@@ -1074,41 +1117,55 @@ class UpdateChecker:
             except ImportError:
                 pass  # Use system certs if certifi not available
 
+            # Use the releases/latest path which redirects to the latest tag
+            # Works for public repos without auth
+            url = f"{self.GITHUB_RELEASES_PAGE}/latest"
             req = urllib.request.Request(
-                self.GITHUB_RELEASES_PAGE,
+                url,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; SAPCSVMerger/1.0)"},
             )
-            with urllib.request.urlopen(
-                req, timeout=10, context=ssl_context
-            ) as response:
-                html = response.read().decode("utf-8", errors="replace")
 
-            # Parse latest release tag from HTML
-            # Looks for: /ITSyndicate25/SAP-CSV-Merger/releases/tag/v1.X.X
-            match = re.search(
-                r"/ITSyndicate25/SAP-CSV-Merger/releases/tag/v(\d+\.\d+\.\d+)",
-                html,
-            )
-            if not match:
-                return (None, "No release found on GitHub.")
+            # Disable redirect handling so we catch the redirect itself
+            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None  # Stop at redirect, return it
 
-            latest_version = match.group(1)
-            release_url = f"{self.GITHUB_RELEASES_PAGE}/tag/v{latest_version}"
+            opener = urllib.request.build_opener(NoRedirectHandler)
+            with opener.open(req, timeout=10, context=ssl_context) as response:
+                status = response.getcode()
 
-            current = tuple(int(x) for x in self.current_version.split("."))
-            latest = tuple(int(x) for x in latest_version.split("."))
+                # 302 redirect = found a latest release
+                if status in (301, 302, 303, 307, 308):
+                    final_url = response.headers.get("Location", "")
+                    # Extract tag from URL like .../releases/tag/v1.0.9
+                    import re
 
-            update_available = latest > current
+                    match = re.search(r"/tag/v(\d+\.\d+\.\d+)", final_url)
+                    if match:
+                        latest_version = match.group(1)
+                        current = tuple(int(x) for x in self.current_version.split("."))
+                        latest = tuple(int(x) for x in latest_version.split("."))
 
-            return (
-                {
-                    "update_available": update_available,
-                    "latest_version": latest_version,
-                    "release_url": release_url,
-                    "release_notes": "",
-                },
-                None,
-            )
+                        return (
+                            {
+                                "update_available": latest > current,
+                                "latest_version": latest_version,
+                                "release_url": final_url,
+                                "release_notes": "",
+                            },
+                            None,
+                        )
+
+                # 404 = private repo or no releases yet
+                if status == 404:
+                    return (None, "Private repository — open the page in your browser.")
+
+                return (None, f"Unexpected HTTP {status}")
+
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return (None, "Private repository — open the page in your browser.")
+            return (None, f"HTTP Error {e.code}: {e.reason}")
         except Exception as e:
             return (None, str(e))
 
