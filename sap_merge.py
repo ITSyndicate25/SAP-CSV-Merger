@@ -63,7 +63,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.10"
+APP_VERSION = "1.0.11"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -1060,7 +1060,6 @@ class SAPMergerApp:
 
         if info.get("release_notes"):
             notes_text = tk.Text(frame, height=6, width=50, wrap=tk.WORD)
-            notes_text.insert(tk.END, info["release_notes"])
             notes_text.configure(state=tk.DISABLED)
             notes_text.pack(pady=10)
 
@@ -1105,6 +1104,7 @@ class UpdateChecker:
             Tuple of (result_dict, error_message). result_dict is None on failure.
         """
         import urllib.request
+        import urllib.error
         import ssl
 
         try:
@@ -1137,7 +1137,7 @@ class UpdateChecker:
                 # 302 redirect = found a latest release
                 if status in (301, 302, 303, 307, 308):
                     final_url = response.headers.get("Location", "")
-                    # Extract tag from URL like .../releases/tag/v1.0.9
+                    # Extract tag from URL like .../releases/tag/vX.Y.Z
                     import re
 
                     match = re.search(r"/tag/v(\d+\.\d+\.\d+)", final_url)

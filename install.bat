@@ -2,14 +2,14 @@
 setlocal enabledelayedexpansion
 
 :: SAP CSV Merger Installer
-:: Version 1.0.10
+:: Version 1.0.11
 
 title SAP CSV Merger Installer
 color 0A
 
 echo.
 echo ============================================================
-echo           SAP CSV Merger Installer v1.0.10
+echo           SAP CSV Merger Installer v1.0.11
 echo ============================================================
 echo.
 echo This installer will install SAP CSV Merger on your computer.
@@ -75,7 +75,7 @@ powershell -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.Create
 echo [5/5] Registering uninstaller with Windows...
 (
 reg add "%UNINSTALL_REG_KEY%" /v "DisplayName" /t REG_SZ /d "SAP CSV Merger" /f >nul
-reg add "%UNINSTALL_REG_KEY%" /v "DisplayVersion" /t REG_SZ /d "1.0.10" /f >nul
+reg add "%UNINSTALL_REG_KEY%" /v "DisplayVersion" /t REG_SZ /d "1.0.11" /f >nul
 reg add "%UNINSTALL_REG_KEY%" /v "DisplayIcon" /t REG_SZ /d "\"%INSTALL_DIR%\SAP_CSV_Merger.exe\",0" /f >nul
 reg add "%UNINSTALL_REG_KEY%" /v "InstallLocation" /t REG_SZ /d "\"%INSTALL_DIR%\"" /f >nul
 reg add "%UNINSTALL_REG_KEY%" /v "Publisher" /t REG_SZ /d "ITSyndicate25" /f >nul
