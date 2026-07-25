@@ -10,7 +10,9 @@ import os
 import re
 import csv
 import subprocess
+import threading
 import tkinter as tk
+import webbrowser
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -34,6 +36,7 @@ SYNTHETIC_HEADERS = [
     "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
+APP_VERSION = "1.0.0"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
@@ -242,9 +245,20 @@ class SAPMergerApp:
         # Setup UI
         self.create_widgets()
         self.update_connection_status()
+        
+        # Check for updates after UI renders
+        self.root.after(2000, self.check_for_updates)
 
     def create_widgets(self):
         """Create all GUI widgets with modern styling."""
+        # Menu bar
+        menubar = tk.Menu(self.root)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Check for Updates", command=self.check_for_updates)
+        help_menu.add_command(label="About", command=self.show_about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        self.root.config(menu=menubar)
+        
         # Main container with padding
         main_frame = ttk.Frame(self.root, padding=(Spacing.LG, Spacing.SM))
 
@@ -708,6 +722,110 @@ class SAPMergerApp:
     def set_status(self, message: str):
         """Update status bar."""
         self.status_bar.configure(text=message)
+
+    def check_for_updates(self, silent: bool = False):
+        """Check GitHub for updates. silent=True = no dialog if already current."""
+        def _check():
+            checker = UpdateChecker(APP_VERSION)
+            result = checker.check()
+            self.root.after(0, self._handle_update_result, result, silent)
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _handle_update_result(self, result: dict | None, silent: bool):
+        if result is None:
+            if not silent:
+                messagebox.showinfo("Update Check", "Could not check for updates. Check your internet connection.")
+            return
+        if result["update_available"]:
+            self._show_update_dialog(result)
+        elif not silent:
+            messagebox.showinfo("Up to Date", f"You're running the latest version ({APP_VERSION}).")
+
+    def _show_update_dialog(self, info: dict):
+        """Show a custom update-available dialog with download button."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Update Available")
+        dialog.geometry("480x280")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # UI
+        frame = ttk.Frame(dialog, padding=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(frame, text="A new version is available!", font=("Segoe UI", 12, "bold")).pack(pady=(0, 10))
+        
+        versions_frame = ttk.Frame(frame)
+        versions_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(versions_frame, text=f"Current: {APP_VERSION}").pack(side=tk.LEFT)
+        ttk.Label(versions_frame, text=f"Latest: {info['latest_version']}").pack(side=tk.RIGHT)
+        
+        if info.get("release_notes"):
+            notes_text = tk.Text(frame, height=6, width=50, wrap=tk.WORD)
+            notes_text.insert(tk.END, info["release_notes"])
+            notes_text.configure(state=tk.DISABLED)
+            notes_text.pack(pady=10)
+        
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(pady=10)
+        
+        def open_download():
+            webbrowser.open(info["release_url"])
+            dialog.destroy()
+        
+        ttk.Button(btn_frame, text="Download", command=open_download).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Later", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+
+    def show_about(self):
+        messagebox.showinfo(
+            "About SAP CSV Merger",
+            f"SAP CSV Merger v{APP_VERSION}\n\n"
+            "Merge daily SAP CSV files from shared folder.\n\n"
+            "© ITSyndicate25"
+        )
+
+
+class UpdateChecker:
+    """Checks GitHub for newer releases and reports availability."""
+
+    GITHUB_API = "https://api.github.com/repos/ITSyndicate25/SAP-CSV-Merger/releases/latest"
+    GITHUB_RELEASES_PAGE = "https://github.com/ITSyndicate25/SAP-CSV-Merger/releases"
+
+    def __init__(self, current_version: str):
+        self.current_version = current_version
+
+    def check(self) -> dict | None:
+        """Fetch latest release from GitHub API. Returns dict or None on failure."""
+        import urllib.request
+        import json
+        
+        try:
+            req = urllib.request.Request(
+                self.GITHUB_API,
+                headers={"Accept": "application/vnd.github.v3+json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                
+                tag_name = data.get("tag_name", "")
+                latest_version = tag_name.lstrip("v")
+                release_url = data.get("html_url", self.GITHUB_RELEASES_PAGE)
+                release_notes = data.get("body", "")
+                
+                current = tuple(int(x) for x in self.current_version.split("."))
+                latest = tuple(int(x) for x in latest_version.split("."))
+                
+                update_available = latest > current
+                
+                return {
+                    "update_available": update_available,
+                    "latest_version": latest_version,
+                    "release_url": release_url,
+                    "release_notes": release_notes
+                }
+        except Exception:
+            return None
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
