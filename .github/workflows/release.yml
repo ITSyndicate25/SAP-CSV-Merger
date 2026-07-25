@@ -33,9 +33,6 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller sap_csv_merger.spec
 
-      - name: Create ZIP archive
-        run: Compress-Archive -Path dist/SAP_CSV_Merger -DestinationPath SAP_CSV_Merger.zip
-
       - name: Generate changelog
         id: changelog
         shell: bash
@@ -65,10 +62,9 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
-            SAP_CSV_Merger.zip
             dist/SAP_CSV_Merger/SAP_CSV_Merger.exe
           body: |
             ${{ steps.changelog.outputs.changelog }}
