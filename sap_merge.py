@@ -36,7 +36,7 @@ SYNTHETIC_HEADERS = [
     "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 
 # ─── Network Drive Management ─────────────────────────────────────────────────
