@@ -216,6 +216,12 @@ class Theme:
             foreground=Colors.TEXT_PRIMARY,
             background=Colors.SURFACE,
         )
+        style.configure(
+            "TitleCard.TLabel",
+            font=Typography.HEADER_LG,
+            foreground=Colors.TEXT_PRIMARY,
+            background=Colors.SURFACE,
+        )
 
         # Status labels
         style.configure("Success.TLabel", foreground=Colors.SUCCESS)
@@ -328,6 +334,23 @@ class Theme:
             "Accent.TButton",
             background=[("active", Colors.SECONDARY_DARK), ("disabled", "#80cbc4")],
             foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
+        )
+
+        # Warning button (reset actions)
+        style.configure(
+            "Warning.TButton",
+            font=Typography.BUTTON,
+            foreground=Colors.TEXT_PRIMARY,
+            background=Colors.WARNING,
+            borderwidth=0,
+            padding=[Spacing.LG, Spacing.SM],
+            relief="flat",
+        )
+
+        style.map(
+            "Warning.TButton",
+            background=[("active", "#e0a800"), ("disabled", "#fde08a")],
+            foreground=[("disabled", Colors.TEXT_DISABLED)],
         )
 
         # ── Configure Entries ──

@@ -61,7 +61,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.14"
+APP_VERSION = "1.0.15"
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -387,75 +387,39 @@ class SAPMergerApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(3, weight=1)  # csv preview — stretches
+        main_frame.rowconfigure(2, weight=1)  # csv preview — stretches
         main_frame.grid(row=0, column=0, sticky="nsew")
 
-        # ── Title Section ──
-        title_frame = ttk.Frame(main_frame)
-        title_frame.grid(row=0, column=0, sticky="ew", pady=(0, Spacing.SM))
+        # ── Compact Header Bar (Title + Network Connection) ──
+        header_bar = ttk.Frame(main_frame, style="Card.TFrame")
+        header_bar.grid(row=0, column=0, sticky="ew", pady=(0, Spacing.SM))
+        header_bar.columnconfigure(1, weight=1)  # spacer — pushes controls right
 
         title_label = ttk.Label(
-            title_frame, text="SAP CSV Merger", style="Title.TLabel"
+            header_bar, text="SAP CSV Merger", style="TitleCard.TLabel"
         )
-        title_label.grid(row=0, column=0, sticky="w")
+        title_label.grid(row=0, column=0, sticky="w", padx=Spacing.LG, pady=Spacing.SM)
 
-        subtitle_label = ttk.Label(
-            title_frame,
-            text="Merge daily SAP CSV files from shared folder",
-            style="Caption.TLabel",
-        )
-        subtitle_label.grid(row=1, column=0, sticky="w", pady=(Spacing.XXS, 0))
-
-        # ── Network Connection Card ──
-        net_card = ttk.Frame(main_frame, style="Card.TFrame")
-        net_card.grid(row=1, column=0, sticky="ew", pady=(0, Spacing.SM))
-
-        net_header = ttk.Label(
-            net_card, text="Network Connection", style="Subheader.TLabel"
-        )
-        net_header.grid(
-            row=0,
-            column=0,
-            columnspan=3,
-            sticky="w",
-            padx=Spacing.LG,
-            pady=(Spacing.SM, Spacing.XS),
-        )
-
-        # Separator
-        ttk.Separator(net_card, orient="horizontal").grid(
-            row=1, column=0, columnspan=3, sticky="ew", padx=Spacing.LG
-        )
-
-        # Connection controls
-        net_content = ttk.Frame(net_card, style="Card.TFrame")
-        net_content.grid(
-            row=2,
-            column=0,
-            columnspan=3,
-            sticky="ew",
-            padx=Spacing.LG,
-            pady=(Spacing.SM, Spacing.SM),
-        )
-
-        # Status indicator
         self.status_indicator = tk.Canvas(
-            net_content,
+            header_bar,
             width=12,
             height=12,
             highlightthickness=0,
             bg=Colors.DISCONNECTED,
         )
-        self.status_indicator.grid(row=0, column=0, padx=(0, Spacing.SM))
+        self.status_indicator.grid(
+            row=0, column=2, padx=(0, Spacing.SM), pady=Spacing.SM
+        )
 
         self.status_label = ttk.Label(
-            net_content, text="Disconnected", style="Label.TLabel"
+            header_bar, text="Disconnected", style="Label.TLabel"
         )
-        self.status_label.grid(row=0, column=1, padx=(0, Spacing.XL))
+        self.status_label.grid(row=0, column=3, padx=(0, Spacing.XL), pady=Spacing.SM)
 
-        # Action buttons
-        btn_frame = ttk.Frame(net_content, style="Card.TFrame")
-        btn_frame.grid(row=0, column=2, sticky="e")
+        btn_frame = ttk.Frame(header_bar, style="Card.TFrame")
+        btn_frame.grid(
+            row=0, column=4, sticky="e", padx=(0, Spacing.LG), pady=Spacing.SM
+        )
 
         self.connect_btn = ttk.Button(
             btn_frame,
@@ -484,7 +448,7 @@ class SAPMergerApp:
 
         # ── Mid Section: Date Range + Available Files (two-column) ──
         mid_row = ttk.Frame(main_frame)
-        mid_row.grid(row=2, column=0, sticky="ew", pady=(0, Spacing.SM))
+        mid_row.grid(row=1, column=0, sticky="ew", pady=(0, Spacing.SM))
         mid_row.columnconfigure(0, weight=1)
         mid_row.columnconfigure(1, weight=1)
 
@@ -629,7 +593,7 @@ class SAPMergerApp:
         self.clear_date_btn = ttk.Button(
             detect_frame,
             text="Clear Dates",
-            style="Secondary.TButton",
+            style="Warning.TButton",
             command=self.clear_dates,
         )
         self.clear_date_btn.grid(row=0, column=1)
@@ -680,6 +644,12 @@ class SAPMergerApp:
         tree_scrollbar.grid(row=0, column=1, sticky="ns")
         self.file_tree.configure(yscrollcommand=tree_scrollbar.set)
 
+        tree_scrollbar_x = ttk.Scrollbar(
+            tree_container, orient="horizontal", command=self.file_tree.xview
+        )
+        tree_scrollbar_x.grid(row=1, column=0, sticky="ew")
+        self.file_tree.configure(xscrollcommand=tree_scrollbar_x.set)
+
         self.file_tree.bind("<<TreeviewSelect>>", self.on_file_select)
 
         # File count label
@@ -692,7 +662,7 @@ class SAPMergerApp:
 
         # ── CSV Preview Section (full-width below) ──
         preview_card = ttk.Frame(main_frame, style="Card.TFrame")
-        preview_card.grid(row=3, column=0, sticky="nsew", pady=(0, Spacing.SM))
+        preview_card.grid(row=2, column=0, sticky="nsew", pady=(0, Spacing.SM))
         preview_card.columnconfigure(0, weight=1)
         preview_card.rowconfigure(2, weight=1)
 
@@ -718,7 +688,7 @@ class SAPMergerApp:
         tree_container.rowconfigure(0, weight=1)
 
         self.preview_tree = ttk.Treeview(
-            tree_container, columns=SYNTHETIC_HEADERS, show="headings", height=6
+            tree_container, columns=SYNTHETIC_HEADERS, show="headings", height=20
         )
 
         for header in SYNTHETIC_HEADERS:
@@ -748,7 +718,7 @@ class SAPMergerApp:
 
         # ── Action Buttons Section ──
         action_frame = ttk.Frame(main_frame, style="Surface.TFrame")
-        action_frame.grid(row=4, column=0, sticky="ew", pady=(Spacing.MD, 0))
+        action_frame.grid(row=3, column=0, sticky="ew", pady=(Spacing.MD, 0))
 
         # Left side - merge info
         self.merge_info_label = ttk.Label(action_frame, text="", style="Body.TLabel")
@@ -778,13 +748,13 @@ class SAPMergerApp:
         self.clear_btn = ttk.Button(
             btn_container,
             text="Clear All",
-            style="Secondary.TButton",
+            style="Danger.TButton",
             command=self.clear_all,
         )
         self.clear_btn.grid(row=0, column=2)
         # ── Status Bar ──
         status_frame = ttk.Frame(main_frame, style="Card.TFrame")
-        status_frame.grid(row=5, column=0, sticky="ew", pady=(Spacing.MD, 0))
+        status_frame.grid(row=4, column=0, sticky="ew", pady=(Spacing.MD, 0))
 
         self.status_bar = ttk.Label(status_frame, text="Ready", style="Status.TLabel")
         self.status_bar.grid(

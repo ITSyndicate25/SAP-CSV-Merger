@@ -1,6 +1,6 @@
 [project]
 name = "sap-csv-merger"
-version = "1.0.13"
+version = "1.0.15"
 requires-python = ">=3.12"
 description = "Merge daily SAP CSV files from a shared network folder"
 readme = "README.md"
