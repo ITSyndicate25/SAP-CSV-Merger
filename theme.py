@@ -6,7 +6,6 @@ Modern, professional theme for the GUI application.
 import tkinter as tk
 from tkinter import ttk
 
-
 # ─── Color Palette ────────────────────────────────────────────────────────────
 
 

@@ -1,0 +1,33 @@
+[project]
+name = "sap-csv-merger"
+version = "1.0.13"
+requires-python = ">=3.12"
+description = "Merge daily SAP CSV files from a shared network folder"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "ITSyndicate25" }]
+keywords = ["sap", "csv", "merger", "tkinter", "gui"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = ["build", "dist", "installer"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

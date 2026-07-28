@@ -14,17 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit hooks
-        run: pre-commit run --all-files
+          cache: pip
 
       - name: Install PyInstaller
         run: pip install pyinstaller
@@ -32,89 +29,115 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller sap_csv_merger.spec
 
+      - name: Verify build output
+        run: |
+          if (Test-Path dist/SAP_CSV_Merger.exe) {
+            Write-Host "Build verified: SAP_CSV_Merger.exe exists"
+          } else {
+            Write-Error "Build failed: SAP_CSV_Merger.exe not found"
+            exit 1
+          }
+
       - name: Generate changelog
         id: changelog
         shell: bash
+        env:
+          REPO: ${{ github.repository }}
         run: |
           # Get previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          FIRST_COMMIT=$(git rev-list --max-parents=0 HEAD | head -1)
+          CURRENT_TAG=${GITHUB_REF_NAME}
+          REPO_URL="https://github.com/${REPO}"
 
           # Collect commits since last tag
           if [ -z "$PREV_TAG" ]; then
             COMMITS=$(git log --pretty=format:"%s|||%h" HEAD)
           else
-            COMMITS=$(git log --pretty=format:"%s|||%h" ${PREV_TAG}..HEAD)
+            COMMITS=$(git log --pretty=format:"%s|||%h" "${PREV_TAG}..HEAD")
           fi
 
-          # Initialize temp files for each section
-          FEATURES_FILE=$(mktemp)
-          FIXES_FILE=$(mktemp)
-          CI_FILE=$(mktemp)
-          CHORE_FILE=$(mktemp)
-          OTHER_FILE=$(mktemp)
+          # Initialize temp files for each category
+          ADDED_FILE=$(mktemp)
+          CHANGED_FILE=$(mktemp)
+          FIXED_FILE=$(mktemp)
+          WHATS_CHANGED_FILE=$(mktemp)
 
-          # Categorize each commit into temp files
+          # Categorize each commit
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             MSG=$(echo "$line" | cut -d'|' -f1)
             HASH=$(echo "$line" | cut -d'|' -f4)
-            ENTRY="- ${MSG} (${HASH})"
+            COMMIT_URL="${REPO_URL}/commit/${HASH}"
 
+            # Build the What's Changed entry (full message with link)
+            WHATS_ENTRY="- ${MSG} ([${HASH}](${COMMIT_URL}))"
+            echo "$WHATS_ENTRY" >> "$WHATS_CHANGED_FILE"
+
+            # Strip conventional commit prefix for categorized sections
+            CLEAN_MSG=$(echo "$MSG" | sed -E 's/^[a-z]+(\([^)]*\))?: //I')
+
+            # Categorize by commit type
             case "$MSG" in
-              feat*)  echo "$ENTRY" >> "$FEATURES_FILE" ;;
-              fix*)   echo "$ENTRY" >> "$FIXES_FILE" ;;
-              ci*)    echo "$ENTRY" >> "$CI_FILE" ;;
-              chore*) echo "$ENTRY" >> "$CHORE_FILE" ;;
-              *)      echo "$ENTRY" >> "$OTHER_FILE" ;;
+              feat*)
+                echo "- ${CLEAN_MSG} ([${HASH}](${COMMIT_URL}))" >> "$ADDED_FILE"
+                ;;
+              fix*)
+                echo "- ${CLEAN_MSG} ([${HASH}](${COMMIT_URL}))" >> "$FIXED_FILE"
+                ;;
+              perf*|refactor*|ci*|chore*|build*|style*|docs*|test*)
+                echo "- ${CLEAN_MSG} ([${HASH}](${COMMIT_URL}))" >> "$CHANGED_FILE"
+                ;;
+              *)
+                echo "- ${CLEAN_MSG} ([${HASH}](${COMMIT_URL}))" >> "$CHANGED_FILE"
+                ;;
             esac
           done <<< "$COMMITS"
 
           # Build markdown
-          echo "# What's Changed" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
+          {
+            # Categorized sections
+            if [ -s "$ADDED_FILE" ]; then
+              echo "### Added"
+              echo ""
+              cat "$ADDED_FILE"
+              echo ""
+            fi
 
-          if [ -s "$FEATURES_FILE" ]; then
-            echo "## 🚀 Features" >> CHANGELOG.md
-            cat "$FEATURES_FILE" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
+            if [ -s "$CHANGED_FILE" ]; then
+              echo "### Changed"
+              echo ""
+              cat "$CHANGED_FILE"
+              echo ""
+            fi
 
-          if [ -s "$FIXES_FILE" ]; then
-            echo "## 🐛 Bug Fixes" >> CHANGELOG.md
-            cat "$FIXES_FILE" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
+            if [ -s "$FIXED_FILE" ]; then
+              echo "### Fixed"
+              echo ""
+              cat "$FIXED_FILE"
+              echo ""
+            fi
 
-          if [ -s "$CI_FILE" ]; then
-            echo "## ⚙️ CI/CD" >> CHANGELOG.md
-            cat "$CI_FILE" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
+            # What's Changed section
+            if [ -s "$WHATS_CHANGED_FILE" ]; then
+              echo "## What's Changed"
+              echo ""
+              cat "$WHATS_CHANGED_FILE"
+              echo ""
+            fi
 
-          if [ -s "$CHORE_FILE" ]; then
-            echo "## 🔧 Maintenance" >> CHANGELOG.md
-            cat "$CHORE_FILE" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
-
-          if [ -s "$OTHER_FILE" ]; then
-            echo "## 📝 Other Changes" >> CHANGELOG.md
-            cat "$OTHER_FILE" >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
-
-          echo "---" >> CHANGELOG.md
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG:-$FIRST_COMMIT}...${{ github.ref_name }}" >> CHANGELOG.md
+            # Full Changelog link
+            echo "**Full Changelog**: [${PREV_TAG:-initial}...${CURRENT_TAG}](${REPO_URL}/compare/${PREV_TAG:-${CURRENT_TAG}}...${CURRENT_TAG})"
+          } > CHANGELOG.md
 
           # Cleanup
-          rm -f "$FEATURES_FILE" "$FIXES_FILE" "$CI_FILE" "$CHORE_FILE" "$OTHER_FILE"
+          rm -f "$ADDED_FILE" "$CHANGED_FILE" "$FIXED_FILE" "$WHATS_CHANGED_FILE"
 
           # Read changelog content
-          CHANGELOG_CONTENT=$(cat CHANGELOG.md)
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "changelog<<EOF"
+            cat CHANGELOG.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

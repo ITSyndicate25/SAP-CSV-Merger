@@ -6,21 +6,19 @@ Usage: python sap_merge.py
 Requirements: Python 3.6+ (tkinter included by default)
 """
 
+import csv
 import os
 import re
-import csv
 import subprocess
 import threading
 import tkinter as tk
 import webbrowser
-from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict
+from tkinter import filedialog, messagebox, ttk
 
 # Import theme
-from theme import Colors, Typography, Spacing, Theme
-
+from theme import Colors, Spacing, Theme, Typography
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -75,14 +73,17 @@ class NetworkDriveManager:
     def __init__(self):
         self.is_connected = False
 
-    def connect(self) -> Tuple[bool, str]:
+    def connect(self) -> tuple[bool, str]:
         """Map network drive. Returns (success, message)."""
         try:
             # First disconnect if already connected
             self.disconnect()
 
             # Map the drive
-            cmd = f'net use {MAPPED_DRIVE} "{SHARED_FOLDER_PATH}" /user:iSAP_log_user SPX8TD7bWd /persistent:no'
+            cmd = (
+                f'net use {MAPPED_DRIVE} "{SHARED_FOLDER_PATH}"'
+                " /user:iSAP_log_user SPX8TD7bWd /persistent:no"
+            )
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
             if result.returncode == 0:
@@ -95,7 +96,7 @@ class NetworkDriveManager:
         except Exception as e:
             return False, f"Error: {str(e)}"
 
-    def disconnect(self) -> Tuple[bool, str]:
+    def disconnect(self) -> tuple[bool, str]:
         """Disconnect network drive. Returns (success, message)."""
         try:
             cmd = f"net use {MAPPED_DRIVE} /delete"
@@ -117,9 +118,9 @@ class SAPFileHandler:
     """Handles SAP CSV file detection and operations."""
 
     def __init__(self):
-        self.files: Dict[str, Path] = {}  # date_string -> file_path
+        self.files: dict[str, Path] = {}  # date_string -> file_path
 
-    def scan_folder(self) -> Tuple[bool, str, List[str]]:
+    def scan_folder(self) -> tuple[bool, str, list[str]]:
         """Scan folder for SAP CSV files. Returns (success, message, file_dates)."""
         if not os.path.exists(MAPPED_FOLDER):
             return False, f"Folder not found: {MAPPED_FOLDER}", []
@@ -145,7 +146,7 @@ class SAPFileHandler:
 
     def get_files_in_range(
         self, start_date: str, end_date: str
-    ) -> List[Tuple[str, Path, bool]]:
+    ) -> list[tuple[str, Path, bool]]:
         """
         Get files within date range.
         Returns list of (date_str, file_path, exists) tuples.
@@ -172,13 +173,13 @@ class SAPFileHandler:
 
     def validate_file_date(
         self, file_path: Path, expected_date: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Validate that Column L in CSV matches expected date.
         Returns (valid, message).
         """
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 reader = csv.reader(f)
                 # Skip header row, read first data row
                 next(reader, None)
@@ -197,7 +198,8 @@ class SAPFileHandler:
                 else:
                     return (
                         False,
-                        f"Date mismatch: file has {file_date}, expected {expected_date}",
+                        f"Date mismatch: file has {file_date},"
+                        f" expected {expected_date}",
                     )
 
         except Exception as e:
@@ -205,12 +207,12 @@ class SAPFileHandler:
 
     def read_csv_preview(
         self, file_path: Path, max_rows: int = 10
-    ) -> Tuple[List[str], List[List[str]]]:
+    ) -> tuple[list[str], list[list[str]]]:
         """
         Read CSV for preview. Returns (headers, rows).
         """
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 reader = csv.reader(f)
                 rows = []
 
@@ -226,7 +228,7 @@ class SAPFileHandler:
         except Exception as e:
             return SYNTHETIC_HEADERS, [[f"Error reading file: {str(e)}"]]
 
-    def merge_files(self, file_paths: List[Path]) -> Tuple[bool, str, List[List[str]]]:
+    def merge_files(self, file_paths: list[Path]) -> tuple[bool, str, list[list[str]]]:
         """
         Merge multiple CSV files in order.
         Returns (success, message, all_rows).
@@ -241,7 +243,7 @@ class SAPFileHandler:
 
         for file_path in valid_paths:
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
                     reader = csv.reader(f)
                     file_rows = 0
 
@@ -283,9 +285,9 @@ class SAPMergerApp:
         # Core components
         self.network_manager = NetworkDriveManager()
         self.file_handler = SAPFileHandler()
-        self.found_dates: List[str] = []
-        self.selected_files: List[Path] = []
-        self.merged_data: Optional[List[List[str]]] = None
+        self.found_dates: list[str] = []
+        self.selected_files: list[Path] = []
+        self.merged_data: list[list[str]] | None = None
 
         # Setup UI
         self.create_widgets()
@@ -790,8 +792,16 @@ class SAPMergerApp:
     def detect_files(self):
         """Detect files in selected date range."""
         # Build date strings from dropdowns
-        start_date = f"{self.start_year_var.get()}-{self.start_month_var.get()}-{self.start_day_var.get()}"
-        end_date = f"{self.end_year_var.get()}-{self.end_month_var.get()}-{self.end_day_var.get()}"
+        start_date = (
+            f"{self.start_year_var.get()}"
+            f"-{self.start_month_var.get()}"
+            f"-{self.start_day_var.get()}"
+        )
+        end_date = (
+            f"{self.end_year_var.get()}"
+            f"-{self.end_month_var.get()}"
+            f"-{self.end_day_var.get()}"
+        )
 
         # Validate date format
         try:
@@ -1107,10 +1117,10 @@ class UpdateChecker:
         Returns:
             Tuple of (result_dict, error_message). result_dict is None on failure.
         """
-        import urllib.request
-        import urllib.error
-        import ssl
         import re
+        import ssl
+        import urllib.error
+        import urllib.request
 
         try:
             # Handle SSL certificates in PyInstaller bundles

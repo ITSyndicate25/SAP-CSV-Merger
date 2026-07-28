@@ -3,6 +3,7 @@ build/
 dist/
 *.spec
 __pycache__/
+.ruff_cache/
 *.pyc
 *.pyo
 .env
