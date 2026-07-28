@@ -231,11 +231,15 @@ class SAPFileHandler:
         Merge multiple CSV files in order.
         Returns (success, message, all_rows).
         """
+        valid_paths = [p for p in file_paths if p is not None and p.exists()]
+        if not valid_paths:
+            return False, "No valid files available to merge.", []
+
         all_rows = []
         total_rows = 0
         errors = []
 
-        for file_path in file_paths:
+        for file_path in valid_paths:
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     reader = csv.reader(f)
@@ -255,7 +259,7 @@ class SAPFileHandler:
         if errors:
             return False, f"Errors: {'; '.join(errors)}", all_rows
 
-        return True, f"Merged {total_rows} rows from {len(file_paths)} files", all_rows
+        return True, f"Merged {total_rows} rows from {len(valid_paths)} files", all_rows
 
 
 # ─── Main Application ─────────────────────────────────────────────────────────
@@ -821,7 +825,7 @@ class SAPMergerApp:
                 self.file_listbox.insert(
                     tk.END, f"{status}  {display_date}  •  {file_path.name}  (missing)"
                 )
-                self.selected_files.append(None)
+                # Do not append missing files to selected_files
 
         self.file_count_label.configure(
             text=f"{found_count} of {len(files_in_range)} files available"
