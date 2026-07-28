@@ -313,6 +313,23 @@ class Theme:
             foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
         )
 
+        # Accent button (Scan Folder)
+        style.configure(
+            "Accent.TButton",
+            font=Typography.BUTTON,
+            foreground=Colors.TEXT_ON_PRIMARY,
+            background=Colors.SECONDARY,
+            borderwidth=0,
+            padding=[Spacing.LG, Spacing.SM],
+            relief="flat",
+        )
+
+        style.map(
+            "Accent.TButton",
+            background=[("active", Colors.SECONDARY_DARK), ("disabled", "#80cbc4")],
+            foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
+        )
+
         # ── Configure Entries ──
         style.configure(
             "TEntry", font=Typography.BODY_MD, padding=[Spacing.SM, Spacing.SM]

@@ -18,7 +18,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 # Import theme
-from theme import Colors, Spacing, Theme, Typography
+from theme import Colors, Spacing, Theme
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,38 @@ DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
 APP_VERSION = "1.0.13"
 
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _is_folder_open_in_explorer(folder_path: str) -> bool:
+    """Return True if any Explorer window has *folder_path* open.
+
+    Uses PowerShell COM (built into Windows); returns False on any failure
+    so the disconnect is never permanently blocked.
+    """
+    try:
+        ps_script = (
+            "$shell = New-Object -ComObject Shell.Application; "
+            "$found = $false; "
+            "foreach ($w in $shell.Windows()) { "
+            "  if ($w.Document -and $w.Document.Folder) { "
+            "    $p = $w.Document.Folder.Self.Path; "
+            f'    if ($p -like "*{folder_path}*") {{ $found = $true; break }} '
+            "  } "
+            "}; "
+            "Write-Output $found"
+        )
+        result = subprocess.run(
+            ["powershell.exe", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0 and "True" in result.stdout
+    except Exception:
+        return False
+
+
 # ─── Network Drive Management ─────────────────────────────────────────────────
 
 
@@ -100,9 +132,25 @@ class NetworkDriveManager:
         """Disconnect network drive. Returns (success, message)."""
         try:
             cmd = f"net use {MAPPED_DRIVE} /delete"
-            subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            self.is_connected = False
-            return True, "Disconnected"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                self.is_connected = False
+                return True, "Disconnected"
+
+            error_msg = (result.stderr.strip() or result.stdout.strip()).lower()
+            if any(
+                phrase in error_msg
+                for phrase in ("in use", "open files", "2401", "has open files")
+            ):
+                return (
+                    False,
+                    "Please close all open iSAP folders before disconnecting"
+                    " the network drive.",
+                )
+            err = result.stderr.strip() or result.stdout.strip()
+            return False, f"Disconnect failed: {err}"
+
         except Exception as e:
             return False, f"Error: {str(e)}"
 
@@ -115,31 +163,56 @@ class NetworkDriveManager:
 
 
 class SAPFileHandler:
-    """Handles SAP CSV file detection and operations."""
+    """Handles SAP CSV file detection and operations across main and archive folders."""
 
     def __init__(self):
         self.files: dict[str, Path] = {}  # date_string -> file_path
+        # date_string -> source folder name ("" for main)
+        self.file_sources: dict[str, str] = {}
+        self.archive_folders: list[str] = []  # list of YYYYMM folder names
 
     def scan_folder(self) -> tuple[bool, str, list[str]]:
-        """Scan folder for SAP CSV files. Returns (success, message, file_dates)."""
+        """Scan main folder and all monthly archive subfolders for SAP CSV files."""
         if not os.path.exists(MAPPED_FOLDER):
             return False, f"Folder not found: {MAPPED_FOLDER}", []
 
         self.files.clear()
+        self.file_sources.clear()
+        self.archive_folders.clear()
         found_dates = []
 
         try:
             for item in os.listdir(MAPPED_FOLDER):
-                match = FILE_PATTERN.match(item)
-                if match:
-                    date_str = match.group(1)
-                    file_path = Path(MAPPED_FOLDER) / item
-                    if file_path.is_file():
-                        self.files[date_str] = file_path
-                        found_dates.append(date_str)
+                item_path = Path(MAPPED_FOLDER) / item
+                if item_path.is_dir():
+                    # Check if it's a monthly archive folder (6 digits, all numeric)
+                    if item.isdigit() and len(item) == 6:
+                        self.archive_folders.append(item)
+                        # Scan archive folder
+                        for archived_file in os.listdir(item_path):
+                            match = FILE_PATTERN.match(archived_file)
+                            if match:
+                                date_str = match.group(1)
+                                file_path = item_path / archived_file
+                                if file_path.is_file():
+                                    self.files[date_str] = file_path
+                                    self.file_sources[date_str] = item
+                                    found_dates.append(date_str)
+                else:
+                    # File in main folder
+                    match = FILE_PATTERN.match(item)
+                    if match:
+                        date_str = match.group(1)
+                        file_path = Path(MAPPED_FOLDER) / item
+                        if file_path.is_file():
+                            self.files[date_str] = file_path
+                            self.file_sources[date_str] = ""
+                            found_dates.append(date_str)
 
             found_dates.sort()
-            return True, f"Found {len(found_dates)} files", found_dates
+            total_archives = len(self.archive_folders)
+            msg = f"Found {len(found_dates)} files ({total_archives} archive folders)"
+            return True, msg, found_dates
 
         except Exception as e:
             return False, f"Scan error: {str(e)}", []
@@ -288,6 +361,7 @@ class SAPMergerApp:
         self.found_dates: list[str] = []
         self.selected_files: list[Path] = []
         self.merged_data: list[list[str]] | None = None
+        self.tree_file_map: dict[str, Path] = {}  # tree iid -> file_path
 
         # Setup UI
         self.create_widgets()
@@ -403,7 +477,7 @@ class SAPMergerApp:
         self.scan_btn = ttk.Button(
             btn_frame,
             text="Scan Folder",
-            style="Secondary.TButton",
+            style="Accent.TButton",
             command=self.scan_folder,
         )
         self.scan_btn.grid(row=0, column=2)
@@ -562,13 +636,12 @@ class SAPMergerApp:
 
         # ═══ Available Files Card (right column) ═══
         file_card = ttk.Frame(mid_row, style="Card.TFrame")
-        file_card.grid(row=0, column=1, sticky="ew", padx=(Spacing.SM, 0))
+        file_card.grid(row=0, column=1, sticky="nsew", padx=(Spacing.SM, 0))
         file_card.columnconfigure(0, weight=1)
+        file_card.rowconfigure(2, weight=1)
 
         # Card header
-        file_header = ttk.Label(
-            file_card, text="Available Files", style="CardHeader.TLabel"
-        )
+        file_header = ttk.Label(file_card, text="SAP Files", style="CardHeader.TLabel")
         file_header.grid(
             row=0, column=0, sticky="w", padx=Spacing.MD, pady=(Spacing.MD, Spacing.XS)
         )
@@ -578,35 +651,36 @@ class SAPMergerApp:
             row=1, column=0, sticky="ew", padx=Spacing.LG
         )
 
-        # File listbox with scrollbar
-        list_container = ttk.Frame(file_card)
-        list_container.grid(
-            row=2, column=0, sticky="ew", padx=Spacing.MD, pady=Spacing.SM
+        # File treeview with scrollbar
+        tree_container = ttk.Frame(file_card)
+        tree_container.grid(
+            row=2, column=0, sticky="nsew", padx=Spacing.MD, pady=Spacing.SM
         )
-        list_container.columnconfigure(0, weight=1)
+        tree_container.columnconfigure(0, weight=1)
+        tree_container.rowconfigure(0, weight=1)
 
-        self.file_listbox = tk.Listbox(
-            list_container,
-            font=Typography.BODY_SM,
-            selectmode=tk.EXTENDED,
-            bg=Colors.SURFACE,
-            fg=Colors.TEXT_PRIMARY,
-            selectbackground=Colors.PRIMARY_LIGHT,
-            selectforeground=Colors.PRIMARY,
-            highlightthickness=0,
-            borderwidth=0,
-            relief="flat",
-            height=4,
+        self.file_tree = ttk.Treeview(
+            tree_container,
+            columns=("date", "source"),
+            show="tree headings",
+            selectmode="extended",
+            height=6,
         )
-        self.file_listbox.grid(row=0, column=0, sticky="nsew")
+        self.file_tree.heading("#0", text="Filename")
+        self.file_tree.heading("date", text="Date")
+        self.file_tree.heading("source", text="Source")
+        self.file_tree.column("#0", width=160, minwidth=100)
+        self.file_tree.column("date", width=90, minwidth=70)
+        self.file_tree.column("source", width=100, minwidth=80)
+        self.file_tree.grid(row=0, column=0, sticky="nsew")
 
-        scrollbar = ttk.Scrollbar(
-            list_container, orient="vertical", command=self.file_listbox.yview
+        tree_scrollbar = ttk.Scrollbar(
+            tree_container, orient="vertical", command=self.file_tree.yview
         )
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.file_listbox.configure(yscrollcommand=scrollbar.set)
+        tree_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.file_tree.configure(yscrollcommand=tree_scrollbar.set)
 
-        self.file_listbox.bind("<<ListboxSelect>>", self.on_file_select)
+        self.file_tree.bind("<<TreeviewSelect>>", self.on_file_select)
 
         # File count label
         self.file_count_label = ttk.Label(
@@ -754,8 +828,23 @@ class SAPMergerApp:
         self.set_status("Disconnecting...")
         self.disconnect_btn.configure(state="disabled")
 
+        # Proactive check: is the shared folder open in Explorer?
+        if _is_folder_open_in_explorer(MAPPED_FOLDER):
+            messagebox.showwarning(
+                "Folder in Use",
+                "Please close all open iSAP folders before disconnecting"
+                " the network drive.",
+            )
+            self.disconnect_btn.configure(state="normal")
+            self.set_status("Disconnect cancelled — folder in use")
+            return
+
         success, message = self.network_manager.disconnect()
         self.update_connection_status()
+
+        if not success:
+            messagebox.showerror("Disconnect Error", message)
+
         self.set_status(message)
         self.clear_all()
 
@@ -767,30 +856,61 @@ class SAPMergerApp:
 
         if success:
             self.set_status(message)
-            self.populate_file_list()
+            self.populate_file_tree()
             self.file_count_label.configure(text=f"{len(dates)} files found")
         else:
             self.set_status(message)
             messagebox.showerror("Scan Error", message)
 
-    def populate_file_list(self):
-        """Populate file listbox with detected files."""
-        self.file_listbox.delete(0, tk.END)
+    def populate_file_tree(self):
+        """Populate file treeview with detected files from main and archive folders."""
+        # Clear tree
+        for item in self.file_tree.get_children():
+            self.file_tree.delete(item)
+        self.tree_file_map.clear()
         self.selected_files.clear()
 
+        # Add root node
+        self.file_tree.insert("", "end", iid="root", text="📁 iSAP_IF", open=True)
+
+        # Add current files node
+        self.file_tree.insert(
+            "root", "end", iid="current_files", text="📁 Current SAP Files", open=True
+        )
+
+        # Add archive folder nodes (sorted descending — newest first)
+        for folder in sorted(self.file_handler.archive_folders, reverse=True):
+            self.file_tree.insert(
+                "root", "end", iid=f"folder_{folder}", text=f"📁 {folder}", open=False
+            )
+
+        # Add file nodes
         for date_str in self.found_dates:
             display_date = datetime.strptime(date_str, DATE_FORMAT).strftime(
                 DATE_DISPLAY_FORMAT
             )
-            self.file_listbox.insert(
-                tk.END, f"{display_date}  •  {date_str}_FYBPL004.csv"
-            )
             file_path = self.file_handler.files.get(date_str)
-            if file_path:
-                self.selected_files.append(file_path)
+            source = self.file_handler.file_sources.get(date_str, "")
+            source_display = "Main folder" if source == "" else f"Archive: {source}"
+
+            parent = "current_files" if source == "" else f"folder_{source}"
+            iid = f"file_{date_str}"
+            self.file_tree.insert(
+                parent,
+                "end",
+                iid=iid,
+                text=file_path.name,
+                values=(display_date, source_display),
+            )
+            self.tree_file_map[iid] = file_path
+
+        # Auto-select all files
+        if self.tree_file_map:
+            self.file_tree.selection_set(list(self.tree_file_map.keys()))
+            self.selected_files = list(self.tree_file_map.values())
 
     def detect_files(self):
-        """Detect files in selected date range."""
+        """Detect files in selected date range and auto-select in treeview."""
         # Build date strings from dropdowns
         start_date = (
             f"{self.start_year_var.get()}"
@@ -805,60 +925,72 @@ class SAPMergerApp:
 
         # Validate date format
         try:
-            datetime.strptime(start_date, DATE_DISPLAY_FORMAT)
-            datetime.strptime(end_date, DATE_DISPLAY_FORMAT)
+            start_dt = datetime.strptime(start_date, DATE_DISPLAY_FORMAT)
+            end_dt = datetime.strptime(end_date, DATE_DISPLAY_FORMAT)
         except ValueError:
             messagebox.showerror("Invalid Date", "Please select valid dates.")
+            return
+
+        # Validate range
+        if start_dt > end_dt:
+            messagebox.showerror("Invalid Range", "Start date must be before end date.")
             return
 
         # Get files in range
         files_in_range = self.file_handler.get_files_in_range(start_date, end_date)
 
-        # Update file listbox
-        self.file_listbox.delete(0, tk.END)
+        # Clear current selection
+        self.file_tree.selection_remove(self.file_tree.selection())
         self.selected_files.clear()
 
         found_count = 0
-        for date_str, file_path, exists in files_in_range:
-            display_date = datetime.strptime(date_str, DATE_FORMAT).strftime(
-                DATE_DISPLAY_FORMAT
-            )
-            if exists:
-                status = "✓"
-                self.file_listbox.insert(
-                    tk.END, f"{status}  {display_date}  •  {file_path.name}"
-                )
-                self.selected_files.append(file_path)
-                found_count += 1
-            else:
-                status = "✗"
-                self.file_listbox.insert(
-                    tk.END, f"{status}  {display_date}  •  {file_path.name}  (missing)"
-                )
-                # Do not append missing files to selected_files
+        missing_count = 0
+        select_iids = []
 
+        for date_str, _file_path, exists in files_in_range:
+            if exists:
+                iid = f"file_{date_str}"
+                if iid in self.tree_file_map:
+                    select_iids.append(iid)
+                    found_count += 1
+
+                    # Expand parent folder
+                    source = self.file_handler.file_sources.get(date_str, "")
+                    parent_iid = "current_files" if source == "" else f"folder_{source}"
+                    self.file_tree.item(parent_iid, open=True)
+            else:
+                missing_count += 1
+
+        if select_iids:
+            self.file_tree.selection_set(select_iids)
+            # on_file_select handler will update self.selected_files
+
+        total = len(files_in_range)
         self.file_count_label.configure(
-            text=f"{found_count} of {len(files_in_range)} files available"
+            text=f"{found_count} of {total} files found ({missing_count} missing)"
         )
-        self.set_status(f"Found {found_count} files in range")
+        self.set_status(f"Found {found_count} files in range ({missing_count} missing)")
 
     def on_file_select(self, event):
-        """Handle file selection in listbox."""
-        selection = self.file_listbox.curselection()
+        """Handle file selection in treeview."""
+        selection = self.file_tree.selection()
         if not selection:
             return
 
-        # Get selected index
-        index = selection[0]
+        # Filter to file nodes only (skip root and folder nodes)
+        file_iids = [iid for iid in selection if iid.startswith("file_")]
+        self.selected_files = [
+            self.tree_file_map[iid] for iid in file_iids if iid in self.tree_file_map
+        ]
 
-        # Check if file exists and show preview
-        if index < len(self.selected_files):
-            file_path = self.selected_files[index]
-            if file_path is None or not file_path.exists():
+        # Show preview for the first selected file
+        if file_iids and file_iids[0] in self.tree_file_map:
+            file_path = self.tree_file_map[file_iids[0]]
+            if file_path.exists():
+                self.show_preview(file_path)
+            else:
                 self.clear_preview()
                 self.preview_info_label.configure(text="File not available")
-            else:
-                self.show_preview(file_path)
         else:
             self.clear_preview()
 
@@ -964,7 +1096,7 @@ class SAPMergerApp:
 
     def clear_all(self):
         """Clear all selections and preview."""
-        self.file_listbox.delete(0, tk.END)
+        self.file_tree.selection_remove(self.file_tree.selection())
         self.clear_preview()
         self.selected_files.clear()
         self.merged_data = None

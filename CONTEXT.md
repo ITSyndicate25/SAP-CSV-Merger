@@ -7,6 +7,7 @@
 | SAP CSV file | Daily data export from SAP system, stored as CSV in shared folder |
 | File naming pattern | `YYYYMMDD_FYBPL004.csv` — date prefix + fixed report suffix |
 | Shared folder | Network path `\\192.168.136.8\iSAP_log`, mapped to `Z:\iSAP_IF` |
+| Monthly archive folder | Subfolder under shared folder named `YYYYMM` (e.g., `202606`) containing daily SAP files moved after month-end |
 | Date range | User-selected start and end dates for merging multiple SAP files |
 | Merged file | Combined output of multiple SAP CSVs, appended in date order |
 | Column L | Date field inside CSV content (format: YYYYMMDD), used for validation |
@@ -21,7 +22,7 @@
 | GUI framework | tkinter | Built into Python, zero dependencies, meets no-install requirement |
 | Network mapping | Optional auto-run with disconnect | User controls connection; app can auto-connect on startup |
 | File pattern | Fixed `YYYYMMDD_FYBPL004.csv` | No variation in report suffix |
-| Date selection | Text entry fields (YYYY-MM-DD) | Simple, no extra dependencies |
+| Date selection | Dropdown fields (YYYY, MM, DD) | Simple, no extra dependencies |
 | CSV preview | First 10 rows in table | Quick sanity check without loading full file |
 | Export location | User-selectable folder | Flexibility for different workflows |
 | Error display | Status bar + popup dialogs | Info in status bar, errors in modal popups |
