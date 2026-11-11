@@ -35,11 +35,17 @@ SAP CSV Merger connects to your **shared SAP folder**, detects daily CSV files b
 
 ## 📥 Installation
 
-### Option 1 — Release ZIP (Recommended)
+### Option 1 — Setup Installer (Recommended)
 
-Download `SAP_CSV_Merger_1.0.16.zip` from [Releases](https://github.com/ITSyndicate25/SAP-CSV-Merger/releases) and extract it, then run `install.bat`.
+Download `SAP_CSV_Merger_Setup_1.0.17.exe` from [Releases](https://github.com/ITSyndicate25/SAP-CSV-Merger/releases) and run it.
 
-The ZIP holds the executable, `install.bat` and `uninstall.bat`. No administrator rights are required — everything installs under your own profile.
+Standard Windows installer: choose the folder, optional Desktop shortcut, and it registers in Programs and Features. Installs under your own profile, so no administrator rights are needed.
+
+### Option 1b — Release ZIP
+
+Download `SAP_CSV_Merger_1.0.17.zip` and extract it, then run `install.bat`.
+
+The ZIP holds the executable, `install.bat` and `uninstall.bat`. Use this instead of the Setup when you want a script you can inspect. Both installers write to `%LOCALAPPDATA%\SAP CSV Merger`; only one may own the app at a time, and each refuses to run while the other's registration exists.
 
 ### Option 2 — Build From Source
 
@@ -171,14 +177,15 @@ The version lives in four files: `pyproject.toml`, `sap_merge.py` (`APP_VERSION`
 2. **Commit changes**
 3. **Create and push a tag:**
    ```bash
-   git tag v1.0.16
-   git push origin v1.0.16
+   git tag v1.0.17
+   git push origin v1.0.17
    ```
 4. **GitHub Actions automatically:**
    - Builds the Windows executable with PyInstaller
+   - Compiles `installer.iss` into `SAP_CSV_Merger_Setup_<version>.exe`
    - Packages the executable with `install.bat`, `uninstall.bat` and `README.md`
      into `SAP_CSV_Merger_<version>.zip`
-   - Publishes a GitHub Release with the bare `.exe` and the ZIP
+   - Publishes a GitHub Release with the Setup, the ZIP and the bare `.exe`
 
 ### Manual Build (without GitHub Actions)
 
@@ -192,13 +199,14 @@ Copy-Item dist/SAP_CSV_Merger.exe, install.bat, uninstall.bat, README.md release
 Compress-Archive -Path release/SAP_CSV_Merger -DestinationPath release/SAP_CSV_Merger_<version>.zip
 ```
 
-### Inno Setup Installer (Optional)
+### Inno Setup Installer
 
-The release ships the ZIP built by `install.bat`. If you also want a single-file
-`.exe` installer, build it locally — Inno Setup cannot run in GitHub Actions here:
+The release attaches `SAP_CSV_Merger_Setup_<version>.exe`, compiled from `installer.iss` by the release workflow (GitHub's `windows-latest` image ships Inno Setup 6).
+
+To build it locally:
 
 1. Install [Inno Setup](https://jrsoftware.org/isinfo.php)
-2. Open `installer.iss` and compile it (**Build → Compile**)
+2. Compile: `iscc installer.iss`
 3. Output: `installer/SAP_CSV_Merger_Setup_<version>.exe`
 
 ---
