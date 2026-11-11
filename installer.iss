@@ -1,5 +1,8 @@
 ; Inno Setup Script for SAP CSV Merger
 ; Download Inno Setup from: https://jrsoftware.org/isinfo.php
+;
+; The PyInstaller spec builds a ONE-FILE executable:
+;   pyinstaller sap_csv_merger.spec --clean  ->  dist\SAP_CSV_Merger.exe
 
 #define MyAppName "SAP CSV Merger"
 #define MyAppVersion "1.0.15"
@@ -11,9 +14,12 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
 AllowNoIcons=yes
+; Matches install.bat: per-user install, no administrator rights needed.
+PrivilegesRequired=lowest
 OutputDir=installer
 OutputBaseFilename=SAP_CSV_Merger_Setup_{#MyAppVersion}
 Compression=lzma2
@@ -29,8 +35,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "dist\SAP_CSV_Merger\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\SAP_CSV_Merger\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
