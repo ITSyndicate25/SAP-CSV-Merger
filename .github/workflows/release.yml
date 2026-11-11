@@ -139,10 +139,24 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Package release archive
+        run: |
+          $version = (Get-Content pyproject.toml |
+            ForEach-Object { if ($_ -match '^version = "(.+)"$') { $Matches[1] } })
+          $staging = "release/SAP_CSV_Merger"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          # install.bat and uninstall.bat ship together: the installer copies the
+          # uninstaller and refuses to run without it.
+          Copy-Item dist/SAP_CSV_Merger.exe $staging
+          Copy-Item install.bat, uninstall.bat, README.md $staging
+          Compress-Archive -Path $staging -DestinationPath "release/SAP_CSV_Merger_$version.zip" -Force
+          Get-ChildItem release
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           files: |
             dist/SAP_CSV_Merger.exe
+            release/SAP_CSV_Merger_*.zip
           body: |
             ${{ steps.changelog.outputs.changelog }}
