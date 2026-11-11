@@ -4,7 +4,7 @@ setlocal EnableExtensions
 :: SAP CSV Merger Installer
 :: No goto/labels in this file on purpose: it must work with LF or CRLF endings.
 set "APP_NAME=SAP CSV Merger"
-set "APP_VERSION=1.0.16"
+set "APP_VERSION=1.0.17"
 set "APP_EXE_NAME=SAP_CSV_Merger.exe"
 set "APP_DIR_NAME=SAP_CSV_Merger"
 
@@ -57,6 +57,19 @@ if not defined SOURCE_DIR if not defined SOURCE_EXE (
 
 if not exist "%~dp0uninstall.bat" (
     echo ERROR: uninstall.bat is missing next to install.bat.
+    echo.
+    pause
+    exit /b 1
+)
+
+:: The Inno Setup build registers under its own AppId. Running both would leave
+:: two entries in Programs and Features pointing at the same folder.
+reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1" >nul 2>&1
+if not errorlevel 1 (
+    echo ERROR: %APP_NAME% was installed with SAP_CSV_Merger_Setup.exe.
+    echo.
+    echo Uninstall it from Programs and Features first, or keep using it.
+    echo This script and the Setup installer cannot both own the app.
     echo.
     pause
     exit /b 1
