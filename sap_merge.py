@@ -61,7 +61,7 @@ SYNTHETIC_HEADERS = [
     "AF",
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
-APP_VERSION = "1.0.16"
+APP_VERSION = "1.0.17"
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
