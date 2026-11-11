@@ -189,7 +189,7 @@ pyinstaller sap_csv_merger.spec --clean
 # Package the executable with the installer scripts
 New-Item -ItemType Directory -Force release/SAP_CSV_Merger | Out-Null
 Copy-Item dist/SAP_CSV_Merger.exe, install.bat, uninstall.bat, README.md release/SAP_CSV_Merger
-Compress-Archive -Path release/SAP_CSV_Merger -DestinationPath release/SAP_CSV_Merger_1.0.16.zip
+Compress-Archive -Path release/SAP_CSV_Merger -DestinationPath release/SAP_CSV_Merger_<version>.zip
 ```
 
 ### Inno Setup Installer (Optional)
