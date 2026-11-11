@@ -5,7 +5,7 @@
 ;   pyinstaller sap_csv_merger.spec --clean  ->  dist\SAP_CSV_Merger.exe
 
 #define MyAppName "SAP CSV Merger"
-#define MyAppVersion "1.0.15"
+#define MyAppVersion "1.0.16"
 #define MyAppPublisher "ITSyndicate25"
 #define MyAppExeName "SAP_CSV_Merger.exe"
 

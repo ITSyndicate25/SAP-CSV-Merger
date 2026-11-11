@@ -4,7 +4,7 @@ setlocal EnableExtensions
 :: SAP CSV Merger Installer
 :: No goto/labels in this file on purpose: it must work with LF or CRLF endings.
 set "APP_NAME=SAP CSV Merger"
-set "APP_VERSION=1.0.15"
+set "APP_VERSION=1.0.16"
 set "APP_EXE_NAME=SAP_CSV_Merger.exe"
 set "APP_DIR_NAME=SAP_CSV_Merger"
 
