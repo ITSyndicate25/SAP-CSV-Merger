@@ -38,6 +38,21 @@ jobs:
             exit 1
           }
 
+      - name: Build the Setup installer
+        run: |
+          # windows-latest ships Inno Setup 6; fall back to the default path too.
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            Write-Error "ISCC.exe not found; Inno Setup is missing from the runner image"
+            exit 1
+          }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup compile failed"; exit 1 }
+          Get-ChildItem installer
+
       - name: Generate changelog
         id: changelog
         shell: bash
@@ -158,5 +173,6 @@ jobs:
           files: |
             dist/SAP_CSV_Merger.exe
             release/SAP_CSV_Merger_*.zip
+            installer/SAP_CSV_Merger_Setup_*.exe
           body: |
             ${{ steps.changelog.outputs.changelog }}

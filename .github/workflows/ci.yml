@@ -59,3 +59,16 @@ jobs:
             Write-Error "Build failed: SAP_CSV_Merger.exe not found"
             exit 1
           }
+
+      - name: Compile the Inno Setup script
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            Write-Error "ISCC.exe not found; Inno Setup is missing from the runner image"
+            exit 1
+          }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup compile failed"; exit 1 }
