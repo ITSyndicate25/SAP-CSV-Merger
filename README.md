@@ -38,13 +38,13 @@ SAP CSV Merger connects to your **shared SAP folder**, detects daily CSV files b
 
 ### Option 1 — Setup Installer (Recommended)
 
-Download `SAP_CSV_Merger_Setup_1.0.17.exe` from [Releases](https://github.com/ITSyndicate25/SAP-CSV-Merger/releases) and run it.
+Download `SAP_CSV_Merger_Setup_1.1.0.exe` from [Releases](https://github.com/ITSyndicate25/SAP-CSV-Merger/releases) and run it.
 
 Standard Windows installer: choose the folder, optional Desktop shortcut, and it registers in Programs and Features. Installs under your own profile, so no administrator rights are needed.
 
 ### Option 1b — Release ZIP
 
-Download `SAP_CSV_Merger_1.0.17.zip` and extract it, then run `install.bat`.
+Download `SAP_CSV_Merger_1.1.0.zip` and extract it, then run `install.bat`.
 
 The ZIP holds the executable, `install.bat` and `uninstall.bat`. Use this instead of the Setup when you want a script you can inspect. Both installers write to `%LOCALAPPDATA%\SAP CSV Merger`; only one may own the app at a time, and each refuses to run while the other's registration exists.
 
@@ -180,8 +180,8 @@ The version lives in four files: `pyproject.toml`, `sap_merge.py` (`APP_VERSION`
 2. **Commit changes**
 3. **Create and push a tag:**
    ```bash
-   git tag v1.0.17
-   git push origin v1.0.17
+   git tag v1.1.0
+   git push origin v1.1.0
    ```
 4. **GitHub Actions automatically:**
    - Builds the Windows executable with PyInstaller

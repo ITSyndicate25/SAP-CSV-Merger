@@ -10,7 +10,7 @@
 ; run while this installer's entry exists.
 
 #define MyAppName "SAP CSV Merger"
-#define MyAppVersion "1.0.17"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "ITSyndicate25"
 #define MyAppExeName "SAP_CSV_Merger.exe"
 
