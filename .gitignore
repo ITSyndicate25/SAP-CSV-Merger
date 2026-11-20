@@ -15,3 +15,4 @@ release/
 SAP_CSV_Merger.zip
 venv/
 .venv/
+.kata.local.toml
