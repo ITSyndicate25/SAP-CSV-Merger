@@ -22,7 +22,9 @@
 | GUI framework | tkinter | Built into Python, zero dependencies, meets no-install requirement |
 | Network mapping | Optional auto-run with disconnect | User controls connection; app can auto-connect on startup |
 | File pattern | Fixed `YYYYMMDD_FYBPL004.csv` | No variation in report suffix |
-| Date selection | Dropdown fields (YYYY, MM, DD) | Simple, no extra dependencies |
+| Date selection | Dropdown fields (YYYY, MM, DD) plus Today / 7 days / Month presets | Simple, no extra dependencies; presets cover the common ranges |
+| Layout | Full-width tables stacked with a draggable divider over a compact filter bar | Both data areas get the window width; each can take more height on demand |
+| Scaling | Logical spacing multiplied by `tk scaling`; process is DPI aware | Same proportions on 100% and 150% displays |
 | CSV preview | First 10 rows in table | Quick sanity check without loading full file |
 | Export location | User-selectable folder | Flexibility for different workflows |
 | Error display | Status bar + popup dialogs | Info in status bar, errors in modal popups |
@@ -61,12 +63,12 @@
 ┌─────────────────────────────────────┐
 │           GUI (tkinter)             │
 ├─────────────────────────────────────┤
-│  - Network connection controls      │
-│  - Date range entry fields          │
-│  - File detection display           │
-│  - CSV preview table (10 rows)      │
-│  - Merge/Export buttons             │
-│  - Status bar                       │
+│  - Command bar: connection, scan    │
+│  - Filter bar: dates + quick ranges │
+│  - SAP files table (resizable)      │
+│  - CSV preview table (resizable)    │
+│  - Merge/Export/Clear action bar    │
+│  - Status strip                     │
 └─────────────────────────────────────┘
                   │
                   ▼
@@ -87,11 +89,11 @@
 
 1. Launch app: `python sap_merge.py`
 2. Optionally connect to network drive (auto-run or manual)
-3. Enter date range (From: YYYY-MM-DD, To: YYYY-MM-DD)
-4. Click "Detect Files" — app shows available SAP files
-5. Preview files (first 10 rows displayed)
-6. Click "Merge" — combines files in date order
-7. Click "Export" — choose location, save merged file
+3. Enter date range (From / To, or a quick-range preset)
+4. Click "Detect files" — app selects the available SAP files for that range
+5. Preview files (first 10 rows displayed; drag the divider to resize)
+6. Click "Merge selected" — combines files in date order
+7. Click "Export merged" — choose location, save merged file
 
 ## Validation Rules
 

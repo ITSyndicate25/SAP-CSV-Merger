@@ -29,7 +29,8 @@ SAP CSV Merger connects to your **shared SAP folder**, detects daily CSV files b
 | 🔍 **Live CSV Preview** | Select any file to inspect its contents before merging |
 | 🔄 **Smart Merge** | Combines all files in range into a single dataset |
 | 📤 **One-Click Export** | Save the merged result as a CSV file |
-| 🎨 **Clean GUI** | Built with Tkinter — lightweight, no browser needed |
+| 🎨 **Clean GUI** | Tkinter workspace with crisp high-DPI rendering — no browser needed |
+| ↔️ **Resizable Workspace** | Drag the divider to size SAP files and CSV preview; expand the preview with one click |
 
 ---
 
@@ -76,14 +77,15 @@ python sap_merge.py
 
 ```
   1. LAUNCH the app
-  2. CLICK "Detect Files"   → loads available CSV files from SAP folder
-  3. PICK a date range       → narrows the file list
-  4. CLICK a file            → previews its contents on the right
-  5. CLICK "Merge Selected"  → combines all matched files
-  6. CLICK "Export"          → saves the merged CSV wherever you want
+  2. CLICK "Scan folder"     → lists the daily CSV files on the SAP share
+  3. PICK a date range       → From / To, or Today, 7 days, Month
+  4. CLICK "Detect files"    → selects only files in that range
+  5. CLICK a file            → previews its contents below the file list
+  6. CLICK "Merge selected"  → combines all selected files
+  7. CLICK "Export merged"   → saves the merged CSV wherever you want
 ```
 
-> 💡 **Pro tip:** Use the preview panel to verify column structure before merging.
+> 💡 **Pro tip:** Drag the divider between SAP files and CSV preview to give either table more room, or press **Expand** to fill the window with the preview. **Fit columns** sizes the CSV columns to their contents.
 
 ---
 
@@ -95,7 +97,7 @@ SAP-CSV-Merger/
 │   ├── ci.yml            # Build verification on push/PR
 │   └── release.yml       # Automated release on tag push
 ├── sap_merge.py          # Main application logic & GUI
-├── theme.py              # Colors, typography, spacing tokens
+├── theme.py              # Design system: palette, type, card and ttk styles
 ├── CONTEXT.md            # Business context & requirements
 ├── install.bat           # Batch installer
 ├── uninstall.bat         # Batch uninstaller (copied into the install dir)
@@ -127,8 +129,9 @@ Edit the top of `sap_merge.py` to adjust these constants:
 <details>
 <summary><b>🪟 The GUI looks wrong on my screen</b></summary>
 <br>
-The app uses a responsive two-column layout. If sections are cut off, try:
-- Maximizing the window (F11)
+The app uses a resizable stacked layout. If sections are cut off, try:
+- Maximizing the window (double-click its title bar)
+- Dragging the divider between SAP files and CSV preview
 - Adjusting your screen resolution to at least 1280×720
 </details>
 

@@ -1,108 +1,86 @@
 """
-SAP CSV Merger — Theme and Styling
-Modern, professional theme for the GUI application.
+SAP CSV Merger — design system for the tkinter GUI.
+
+One palette, one type scale, one place for ttk styles. Sizes marked "logical"
+are 96-DPI pixels and pass through :func:`px` so the whole layout keeps its
+proportions on scaled displays.
 """
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
 
 # ─── Color Palette ────────────────────────────────────────────────────────────
 
 
 class Colors:
-    """Modern color palette for data utility tool."""
+    """Palette: dark instrument chrome around a cool, paper-like workspace."""
 
-    # Primary colors
-    PRIMARY = "#1a73e8"  # Google Blue - actions, links
-    PRIMARY_DARK = "#1557b0"  # Darker blue for hover
-    PRIMARY_LIGHT = "#e8f0fe"  # Light blue for backgrounds
+    # Application chrome
+    CHROME = "#0e1b2c"
+    CHROME_HOVER = "#182b42"
+    CHROME_BORDER = "#3b5471"
+    CHROME_TEXT = "#f2f6fb"
+    CHROME_MUTED = "#9db0c6"
 
-    # Secondary colors
-    SECONDARY = "#00897b"  # Teal - accents, secondary actions
-    SECONDARY_DARK = "#00695c"  # Darker teal for hover
+    # Workspace surfaces
+    BACKGROUND = "#eef1f6"
+    SURFACE = "#ffffff"
+    SURFACE_VARIANT = "#f5f8fb"
+    BORDER = "#dde4ec"
+    BORDER_STRONG = "#c7d2df"
 
-    # Neutral colors
-    BACKGROUND = "#f5f7fa"  # Light gray background
-    SURFACE = "#ffffff"  # White surface
-    SURFACE_VARIANT = "#f8f9fa"  # Slightly darker surface
-    BORDER = "#e0e0e0"  # Subtle borders
-    BORDER_LIGHT = "#f0f0f0"  # Very subtle borders
+    # Text
+    TEXT_PRIMARY = "#16212e"
+    TEXT_SECONDARY = "#5b6b7c"
+    TEXT_MUTED = "#8b98a8"
+    TEXT_DISABLED = "#b3bdc9"
+    TEXT_ON_PRIMARY = "#ffffff"
 
-    # Text colors
-    TEXT_PRIMARY = "#1a1a2e"  # Dark text
-    TEXT_SECONDARY = "#5f6368"  # Gray text
-    TEXT_DISABLED = "#9aa0a6"  # Light gray for disabled
-    TEXT_ON_PRIMARY = "#ffffff"  # White text on primary
+    # Accent — one blue, used for the main action and selection only
+    PRIMARY = "#1b5fd8"
+    PRIMARY_DARK = "#1549ad"
+    PRIMARY_LIGHT = "#e8effc"
+    PRIMARY_DISABLED = "#a9c1ee"
 
-    # Status colors
-    SUCCESS = "#34a853"  # Green
-    SUCCESS_LIGHT = "#e6f4ea"  # Light green background
-    WARNING = "#fbbc04"  # Orange/amber
-    WARNING_LIGHT = "#fef7e0"  # Light orange background
-    ERROR = "#ea4335"  # Red
-    ERROR_LIGHT = "#fce8e6"  # Light red background
-    INFO = "#4285f4"  # Blue info
-    INFO_LIGHT = "#e8f0fe"  # Light blue background
-
-    # Connection status
-    CONNECTED = "#34a853"  # Green
-    DISCONNECTED = "#ea4335"  # Red
-
-    # Shadows (simulated with background colors for tkinter)
-    SHADOW_LIGHT = "#e8eaed"
-    SHADOW_MEDIUM = "#d2d5d9"
+    # Semantic
+    SUCCESS = "#157347"
+    SUCCESS_DARK = "#11603a"
+    SUCCESS_LIGHT = "#e6f4ec"
+    WARNING = "#9a6100"
+    WARNING_LIGHT = "#fdf3dd"
+    ERROR = "#c62828"
+    ERROR_DARK = "#a81f1f"
+    ERROR_LIGHT = "#fdecec"
 
 
 # ─── Typography ───────────────────────────────────────────────────────────────
 
 
 class Typography:
-    """Font definitions for the application."""
+    """Segoe UI for the interface, Consolas for CSV data."""
 
-    # Font families
-    FONT_FAMILY = "Segoe UI"  # Clean, modern Windows font
-    MONO_FAMILY = "Consolas"  # Monospace for data/codes
+    FONT_FAMILY = "Segoe UI"
+    MONO_FAMILY = "Consolas"
 
-    # Font sizes
-    SIZE_XS = 9
-    SIZE_SM = 10
-    SIZE_MD = 11
-    SIZE_LG = 13
-    SIZE_XL = 16
-    SIZE_XXL = 20
+    SIZE_XS = 8
+    SIZE_SM = 9
+    SIZE_MD = 10
+    SIZE_XL = 14
 
-    # Font weights (tkinter only supports normal and bold)
-    WEIGHT_NORMAL = "normal"
-    WEIGHT_BOLD = "bold"
-
-    # Predefined font tuples (family, size, weight)
-    HEADER_XL = (FONT_FAMILY, SIZE_XXL, WEIGHT_BOLD)
-    HEADER_LG = (FONT_FAMILY, SIZE_XL, WEIGHT_BOLD)
-    HEADER_MD = (FONT_FAMILY, SIZE_LG, WEIGHT_BOLD)
-    HEADER_SM = (FONT_FAMILY, SIZE_MD, WEIGHT_BOLD)
-
-    BODY_LG = (FONT_FAMILY, SIZE_MD, WEIGHT_NORMAL)
-    BODY_MD = (FONT_FAMILY, SIZE_SM, WEIGHT_NORMAL)
-    BODY_SM = (FONT_FAMILY, SIZE_XS, WEIGHT_NORMAL)
-
-    LABEL = (FONT_FAMILY, SIZE_SM, WEIGHT_BOLD)
-    LABEL_SM = (FONT_FAMILY, SIZE_XS, WEIGHT_NORMAL)
-
-    BUTTON = (FONT_FAMILY, SIZE_SM, WEIGHT_BOLD)
-    BUTTON_LARGE = (FONT_FAMILY, SIZE_MD, WEIGHT_BOLD)
-
-    MONO = (MONO_FAMILY, SIZE_SM, WEIGHT_NORMAL)
-    MONO_BOLD = (MONO_FAMILY, SIZE_SM, WEIGHT_BOLD)
-    MONO_LARGE = (MONO_FAMILY, SIZE_MD, WEIGHT_NORMAL)
-
-    STATUS = (FONT_FAMILY, SIZE_XS, WEIGHT_NORMAL)
+    TITLE = (FONT_FAMILY, SIZE_XL, "bold")
+    CARD_TITLE = (FONT_FAMILY, SIZE_MD, "bold")
+    UI = (FONT_FAMILY, SIZE_SM)
+    UI_BOLD = (FONT_FAMILY, SIZE_SM, "bold")
+    CAPTION = (FONT_FAMILY, SIZE_XS)
+    CAPTION_BOLD = (FONT_FAMILY, SIZE_XS, "bold")
 
 
 # ─── Spacing ──────────────────────────────────────────────────────────────────
 
 
 class Spacing:
-    """Consistent spacing values."""
+    """Logical spacing steps (96-DPI pixels)."""
 
     XXS = 2
     XS = 4
@@ -111,390 +89,365 @@ class Spacing:
     LG = 16
     XL = 24
     XXL = 32
-    XXXL = 48
 
 
-# ─── Border Radius ────────────────────────────────────────────────────────────
+# ─── Scaling ──────────────────────────────────────────────────────────────────
+
+_BASE_SCALING = 96 / 72  # tk scaling at 100% display DPI
 
 
-class BorderRadius:
-    """Border radius values (simulated in tkinter)."""
-
-    SM = 4
-    MD = 6
-    LG = 8
-    XL = 12
+def scale(widget: tk.Misc) -> float:
+    """Return the display scale factor relative to 96 DPI."""
+    return float(widget.tk.call("tk", "scaling")) / _BASE_SCALING
 
 
-# ─── Theme Configuration ─────────────────────────────────────────────────────
+def px(widget: tk.Misc, value: float) -> int:
+    """Convert a logical pixel count to device pixels for *widget*'s display."""
+    return int(round(value * scale(widget)))
+
+
+# ─── Theme Configuration ──────────────────────────────────────────────────────
 
 
 class Theme:
-    """Configure ttk styles for the application."""
+    """Configure ttk styles and the fonts dialogs inherit."""
 
     @staticmethod
     def configure(root: tk.Tk):
-        """Apply theme to the application."""
+        """Apply the design system to *root*."""
+        _configure_fonts()
         style = ttk.Style(root)
 
-        # Use clam theme as base (more customizable)
+        # clam exposes every element we restyle; the native themes ignore most.
         style.theme_use("clam")
 
-        # ── Configure General ──
-        style.configure(".", font=Typography.BODY_MD)
-        style.configure("TFrame", background=Colors.BACKGROUND)
-        style.configure(
-            "TLabel", background=Colors.BACKGROUND, foreground=Colors.TEXT_PRIMARY
-        )
-        style.configure(
-            "TButton", background=Colors.SURFACE, foreground=Colors.TEXT_PRIMARY
-        )
+        # The combobox drop-down is a classic Tk listbox, not a ttk widget.
+        root.option_add("*TCombobox*Listbox.font", Typography.UI)
+        root.option_add("*TCombobox*Listbox.background", Colors.SURFACE)
+        root.option_add("*TCombobox*Listbox.foreground", Colors.TEXT_PRIMARY)
+        root.option_add("*TCombobox*Listbox.selectBackground", Colors.PRIMARY)
+        root.option_add("*TCombobox*Listbox.selectForeground", Colors.TEXT_ON_PRIMARY)
 
-        # ── Configure Frames ──
-        style.configure("TFrame", background=Colors.BACKGROUND)
-        style.configure(
-            "Card.TFrame", background=Colors.SURFACE, relief="flat", borderwidth=0
-        )
-        style.configure("Surface.TFrame", background=Colors.SURFACE)
-        style.configure("Inner.TFrame", background=Colors.SURFACE)
+        def s(value: float) -> int:
+            return px(root, value)
 
-        # ── Configure Labels ──
-        style.configure(
-            "TLabel", background=Colors.BACKGROUND, foreground=Colors.TEXT_PRIMARY
-        )
-        style.configure(
-            "Title.TLabel",
-            font=Typography.HEADER_XL,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "Header.TLabel",
-            font=Typography.HEADER_LG,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "Subheader.TLabel",
-            font=Typography.HEADER_MD,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "CardHeader.TLabel",
-            font=Typography.HEADER_MD,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-        )
-        style.configure(
-            "Body.TLabel",
-            font=Typography.BODY_MD,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "Caption.TLabel",
-            font=Typography.BODY_SM,
-            foreground=Colors.TEXT_SECONDARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "Label.TLabel",
-            font=Typography.LABEL,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "LabelSm.TLabel",
-            font=Typography.LABEL_SM,
-            foreground=Colors.TEXT_SECONDARY,
-            background=Colors.BACKGROUND,
-        )
-        style.configure(
-            "CardTitle.TLabel",
-            font=Typography.HEADER_MD,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-        )
-        style.configure(
-            "TitleCard.TLabel",
-            font=Typography.HEADER_LG,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-        )
+        _configure_frames(style)
+        _configure_labels(style)
+        _configure_buttons(style, s)
+        _configure_inputs(style, s)
+        _configure_treeview(style, root, s)
+        _configure_scrollbar(style)
+        _configure_panedwindow(style, s)
 
-        # Status labels
-        style.configure("Success.TLabel", foreground=Colors.SUCCESS)
-        style.configure("Warning.TLabel", foreground=Colors.WARNING)
-        style.configure("Error.TLabel", foreground=Colors.ERROR)
-        style.configure("Info.TLabel", foreground=Colors.INFO)
 
-        # ── Configure LabelFrames ──
-        style.configure(
-            "TLabelframe", background=Colors.SURFACE, foreground=Colors.TEXT_PRIMARY
+def _configure_fonts():
+    """Match the built-in Tk fonts so menus and message boxes fit the app."""
+    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
+        tkfont.nametofont(name).configure(
+            family=Typography.FONT_FAMILY, size=Typography.SIZE_SM
         )
-        style.configure(
-            "TLabelframe.Label",
-            font=Typography.HEADER_SM,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-        )
+    tkfont.nametofont("TkFixedFont").configure(
+        family=Typography.MONO_FAMILY, size=Typography.SIZE_SM
+    )
 
-        # Card-style Labelframe
-        style.configure(
-            "Card.TLabelframe", background=Colors.SURFACE, relief="flat", borderwidth=0
-        )
-        style.configure(
-            "Card.TLabelframe.Label",
-            font=Typography.HEADER_MD,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-        )
 
-        # ── Configure Buttons ──
-        # Primary button
-        style.configure(
-            "Primary.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_ON_PRIMARY,
-            background=Colors.PRIMARY,
-            borderwidth=0,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
+def _configure_frames(style: ttk.Style):
+    style.configure(".", font=Typography.UI)
+    style.configure("TFrame", background=Colors.BACKGROUND)
+    style.configure("App.TFrame", background=Colors.BACKGROUND)
+    style.configure("Card.TFrame", background=Colors.SURFACE, relief="flat")
 
+
+def _configure_labels(style: ttk.Style):
+    base = dict(background=Colors.BACKGROUND, foreground=Colors.TEXT_PRIMARY)
+    style.configure("TLabel", font=Typography.UI, **base)
+
+    style.configure(
+        "CardTitle.TLabel",
+        font=Typography.CARD_TITLE,
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_PRIMARY,
+    )
+    style.configure(
+        "CardMeta.TLabel",
+        font=Typography.UI,
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_SECONDARY,
+    )
+    style.configure(
+        "CardWarning.TLabel",
+        font=Typography.UI,
+        background=Colors.SURFACE,
+        foreground=Colors.WARNING,
+    )
+    style.configure(
+        "FieldLabel.TLabel",
+        font=Typography.UI_BOLD,
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_PRIMARY,
+    )
+    style.configure(
+        "Pill.TLabel",
+        font=Typography.CAPTION_BOLD,
+        background=Colors.PRIMARY_LIGHT,
+        foreground=Colors.PRIMARY,
+        padding=(8, 3),
+    )
+    style.configure(
+        "Body.TLabel",
+        font=Typography.UI,
+        background=Colors.BACKGROUND,
+        foreground=Colors.TEXT_PRIMARY,
+    )
+    style.configure(
+        "Success.TLabel",
+        font=Typography.UI_BOLD,
+        background=Colors.BACKGROUND,
+        foreground=Colors.SUCCESS,
+    )
+
+
+def _configure_buttons(style: ttk.Style, s):
+    # clam leaves a -11 character minimum on buttons; 0 sizes them to the label.
+    base = dict(font=Typography.UI_BOLD, padding=(s(14), s(7)), width=0, relief="flat")
+    style.configure(
+        "Primary.TButton",
+        foreground=Colors.TEXT_ON_PRIMARY,
+        background=Colors.PRIMARY,
+        borderwidth=0,
+        **base,
+    )
+    style.map(
+        "Primary.TButton",
+        background=[
+            ("disabled", Colors.PRIMARY_DISABLED),
+            ("pressed", Colors.PRIMARY_DARK),
+            ("active", Colors.PRIMARY_DARK),
+        ],
+        foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
+    )
+
+    style.configure(
+        "Success.TButton",
+        foreground=Colors.TEXT_ON_PRIMARY,
+        background=Colors.SUCCESS,
+        borderwidth=0,
+        **base,
+    )
+    style.map(
+        "Success.TButton",
+        background=[
+            ("disabled", "#9dc7b2"),
+            ("pressed", Colors.SUCCESS_DARK),
+            ("active", Colors.SUCCESS_DARK),
+        ],
+        foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
+    )
+
+    style.configure(
+        "Ghost.TButton",
+        foreground=Colors.TEXT_SECONDARY,
+        background=Colors.SURFACE,
+        borderwidth=0,
+        padding=(s(8), s(5)),
+        width=0,
+        font=Typography.UI_BOLD,
+        relief="flat",
+    )
+    style.map(
+        "Ghost.TButton",
+        background=[("active", Colors.SURFACE_VARIANT)],
+        foreground=[("disabled", Colors.TEXT_DISABLED)],
+    )
+
+    style.configure(
+        "Segment.TButton",
+        foreground=Colors.TEXT_PRIMARY,
+        background=Colors.SURFACE_VARIANT,
+        bordercolor=Colors.BORDER_STRONG,
+        lightcolor=Colors.SURFACE_VARIANT,
+        darkcolor=Colors.SURFACE_VARIANT,
+        borderwidth=1,
+        padding=(s(8), s(5)),
+        width=0,
+        font=Typography.UI,
+        relief="flat",
+    )
+    style.map(
+        "Segment.TButton",
+        background=[("active", Colors.PRIMARY_LIGHT)],
+        foreground=[("active", Colors.PRIMARY)],
+    )
+
+    style.configure(
+        "DangerOutline.TButton",
+        foreground=Colors.ERROR,
+        background=Colors.SURFACE,
+        bordercolor=Colors.ERROR_LIGHT,
+        lightcolor=Colors.SURFACE,
+        darkcolor=Colors.SURFACE,
+        borderwidth=1,
+        **base,
+    )
+    style.map(
+        "DangerOutline.TButton",
+        background=[("active", Colors.ERROR_LIGHT)],
+        bordercolor=[("active", Colors.ERROR)],
+    )
+
+    style.configure(
+        "ChromeOutline.TButton",
+        foreground=Colors.CHROME_TEXT,
+        background=Colors.CHROME,
+        bordercolor=Colors.CHROME_BORDER,
+        lightcolor=Colors.CHROME,
+        darkcolor=Colors.CHROME,
+        borderwidth=1,
+        **base,
+    )
+    style.map(
+        "ChromeOutline.TButton",
+        background=[("disabled", Colors.CHROME), ("active", Colors.CHROME_HOVER)],
+        foreground=[("disabled", Colors.CHROME_MUTED)],
+        bordercolor=[("disabled", Colors.CHROME_BORDER)],
+    )
+
+
+def _configure_inputs(style: ttk.Style, s):
+    style.configure(
+        "TCombobox",
+        fieldbackground=Colors.SURFACE,
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_PRIMARY,
+        arrowcolor=Colors.TEXT_SECONDARY,
+        bordercolor=Colors.BORDER_STRONG,
+        lightcolor=Colors.BORDER_STRONG,
+        darkcolor=Colors.BORDER_STRONG,
+        padding=(s(6), s(4)),
+        arrowsize=s(11),
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", Colors.SURFACE)],
+        bordercolor=[("focus", Colors.PRIMARY)],
+        lightcolor=[("focus", Colors.PRIMARY)],
+        selectbackground=[("readonly", Colors.SURFACE)],
+        selectforeground=[("readonly", Colors.TEXT_PRIMARY)],
+    )
+    style.configure(
+        "Tool.TCheckbutton",
+        font=Typography.UI,
+        background=Colors.SURFACE,
+        foreground=Colors.TEXT_SECONDARY,
+        indicatorcolor=Colors.SURFACE,
+        padding=(s(2), s(2)),
+    )
+    style.map(
+        "Tool.TCheckbutton",
+        background=[("active", Colors.SURFACE)],
+        foreground=[("active", Colors.TEXT_PRIMARY)],
+        indicatorcolor=[("selected", Colors.PRIMARY), ("!selected", Colors.SURFACE)],
+    )
+
+
+def _configure_treeview(style: ttk.Style, root: tk.Tk, s):
+    row_font = tkfont.Font(family=Typography.FONT_FAMILY, size=Typography.SIZE_SM)
+    style.configure(
+        "Treeview",
+        font=Typography.UI,
+        background=Colors.SURFACE,
+        fieldbackground=Colors.SURFACE,
+        foreground=Colors.TEXT_PRIMARY,
+        borderwidth=0,
+        relief="flat",
+        rowheight=row_font.metrics("linespace") + s(10),
+    )
+    style.configure(
+        "Treeview.Heading",
+        font=Typography.CAPTION_BOLD,
+        background=Colors.SURFACE_VARIANT,
+        foreground=Colors.TEXT_SECONDARY,
+        borderwidth=0,
+        relief="flat",
+        padding=(s(8), s(6)),
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", Colors.PRIMARY_LIGHT)],
+        foreground=[("selected", Colors.TEXT_PRIMARY)],
+    )
+    style.map("Treeview.Heading", background=[("active", Colors.BORDER)])
+
+
+def _configure_scrollbar(style: ttk.Style):
+    style.configure(
+        "Vertical.TScrollbar",
+        background=Colors.BORDER_STRONG,
+        troughcolor=Colors.SURFACE,
+        bordercolor=Colors.SURFACE,
+        arrowcolor=Colors.TEXT_MUTED,
+        borderwidth=0,
+        relief="flat",
+    )
+    style.configure(
+        "Horizontal.TScrollbar",
+        background=Colors.BORDER_STRONG,
+        troughcolor=Colors.SURFACE,
+        bordercolor=Colors.SURFACE,
+        arrowcolor=Colors.TEXT_MUTED,
+        borderwidth=0,
+        relief="flat",
+    )
+    for orient in ("Vertical", "Horizontal"):
         style.map(
-            "Primary.TButton",
-            background=[("active", Colors.PRIMARY_DARK), ("disabled", "#a0c4f0")],
-            foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
-        )
-
-        # Secondary button
-        style.configure(
-            "Secondary.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.SURFACE,
-            borderwidth=1,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
-
-        style.map(
-            "Secondary.TButton",
-            background=[("active", Colors.SURFACE_VARIANT), ("disabled", "#e8eaed")],
-            foreground=[("disabled", "#9aa0a6")],
-        )
-
-        # Success button
-        style.configure(
-            "Success.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_ON_PRIMARY,
-            background=Colors.SUCCESS,
-            borderwidth=0,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
-
-        style.map(
-            "Success.TButton",
-            background=[("active", "#2d9249"), ("disabled", Colors.TEXT_DISABLED)],
-        )
-
-        # Danger button
-        style.configure(
-            "Danger.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_ON_PRIMARY,
-            background=Colors.ERROR,
-            borderwidth=0,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
-
-        style.map(
-            "Danger.TButton",
-            background=[("active", "#d33426"), ("disabled", "#e07070")],
-            foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
-        )
-
-        # Accent button (Scan Folder)
-        style.configure(
-            "Accent.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_ON_PRIMARY,
-            background=Colors.SECONDARY,
-            borderwidth=0,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
-
-        style.map(
-            "Accent.TButton",
-            background=[("active", Colors.SECONDARY_DARK), ("disabled", "#80cbc4")],
-            foreground=[("disabled", Colors.TEXT_ON_PRIMARY)],
-        )
-
-        # Warning button (reset actions)
-        style.configure(
-            "Warning.TButton",
-            font=Typography.BUTTON,
-            foreground=Colors.TEXT_PRIMARY,
-            background=Colors.WARNING,
-            borderwidth=0,
-            padding=[Spacing.LG, Spacing.SM],
-            relief="flat",
-        )
-
-        style.map(
-            "Warning.TButton",
-            background=[("active", "#e0a800"), ("disabled", "#fde08a")],
-            foreground=[("disabled", Colors.TEXT_DISABLED)],
-        )
-
-        # ── Configure Entries ──
-        style.configure(
-            "TEntry", font=Typography.BODY_MD, padding=[Spacing.SM, Spacing.SM]
-        )
-
-        style.map(
-            "TEntry",
-            fieldbackground=[
-                ("focus", Colors.SURFACE),
-                ("disabled", Colors.SURFACE_VARIANT),
-            ],
-            bordercolor=[("focus", Colors.PRIMARY), ("disabled", Colors.BORDER)],
-        )
-
-        # ── Configure Combobox ──
-        style.configure(
-            "TCombobox", font=Typography.BODY_MD, padding=[Spacing.SM, Spacing.SM]
-        )
-
-        style.map(
-            "TCombobox",
-            fieldbackground=[("readonly", Colors.SURFACE)],
-            selectbackground=[("readonly", Colors.PRIMARY_LIGHT)],
-            selectforeground=[("readonly", Colors.PRIMARY)],
-        )
-
-        # ── Configure Treeview ──
-        style.configure(
-            "Treeview",
-            font=Typography.BODY_SM,
-            background=Colors.SURFACE,
-            foreground=Colors.TEXT_PRIMARY,
-            fieldbackground=Colors.SURFACE,
-            borderwidth=0,
-            padding=[Spacing.SM, Spacing.XS],
-        )
-
-        style.configure(
-            "Treeview.Heading",
-            font=Typography.LABEL,
-            background=Colors.SURFACE_VARIANT,
-            foreground=Colors.TEXT_PRIMARY,
-            borderwidth=0,
-            padding=[Spacing.SM, Spacing.SM],
-        )
-
-        style.map(
-            "Treeview",
-            background=[("selected", Colors.PRIMARY_LIGHT)],
-            foreground=[("selected", Colors.PRIMARY)],
-        )
-
-        style.map("Treeview.Heading", background=[("active", Colors.BORDER)])
-
-        # ── Configure Listbox ──
-        style.configure(
-            "TListbox",
-            font=Typography.BODY_SM,
-            background=Colors.SURFACE,
-            foreground=Colors.TEXT_PRIMARY,
-            selectbackground=Colors.PRIMARY_LIGHT,
-            selectforeground=Colors.PRIMARY,
-            borderwidth=0,
-            highlightthickness=1,
-            highlightbackground=Colors.BORDER,
-            highlightcolor=Colors.PRIMARY,
-        )
-
-        # ── Configure Scrollbar ──
-        style.configure(
-            "Vertical.TScrollbar",
-            background=Colors.SURFACE_VARIANT,
-            troughcolor=Colors.BACKGROUND,
-            borderwidth=0,
-            arrowcolor=Colors.TEXT_SECONDARY,
-            relief="flat",
-        )
-
-        style.map(
-            "Vertical.TScrollbar",
-            background=[
-                ("active", Colors.BORDER),
-                ("disabled", Colors.SURFACE_VARIANT),
-            ],
-        )
-
-        # ── Configure Separator ──
-        style.configure("TSeparator", background=Colors.BORDER)
-
-        # ── Status Bar ──
-        style.configure(
-            "Status.TLabel",
-            font=Typography.STATUS,
-            foreground=Colors.TEXT_SECONDARY,
-            background=Colors.SURFACE_VARIANT,
-            padding=[Spacing.SM, Spacing.XS],
+            f"{orient}.TScrollbar",
+            background=[("active", Colors.TEXT_MUTED), ("disabled", Colors.BORDER)],
         )
 
 
-# ─── Helper Functions ─────────────────────────────────────────────────────────
+def _configure_panedwindow(style: ttk.Style, s):
+    # The sash doubles as the gutter between cards: canvas coloured, no grips.
+    style.configure("TPanedwindow", background=Colors.BACKGROUND)
+    style.configure(
+        "Sash",
+        sashthickness=s(10),
+        gripcount=3,
+        background=Colors.BACKGROUND,
+    )
 
 
-def create_tooltip(widget: tk.Widget, text: str):
-    """Create a simple tooltip for a widget."""
-    tooltip = None
+# ─── Card ─────────────────────────────────────────────────────────────────────
 
-    def show_tooltip(event):
-        nonlocal tooltip
-        tooltip = tk.Toplevel(widget)
-        tooltip.wm_overrideredirect(True)
-        tooltip.wm_geometry(f"+{event.x_root + 10}+{event.y_root + 10}")
 
-        label = tk.Label(
-            tooltip,
-            text=text,
-            font=Typography.BODY_SM,
-            background=Colors.TEXT_PRIMARY,
-            foreground=Colors.TEXT_ON_PRIMARY,
-            padx=Spacing.SM,
-            pady=Spacing.XS,
+class Card(tk.Frame):
+    """White panel with a one-pixel hairline border.
+
+    A 1-pixel border is the whole decoration: tkinter cannot round corners, and
+    simulated shadows cost widget depth for no legibility gain.
+    """
+
+    def __init__(self, parent: tk.Misc, title: str):
+        super().__init__(parent, bg=Colors.BORDER)
+        self.inner = ttk.Frame(self, style="Card.TFrame")
+        self.inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+        self.header = ttk.Frame(self.inner, style="Card.TFrame")
+        self.header.pack(
+            fill="x",
+            padx=px(self, Spacing.LG),
+            pady=(px(self, Spacing.MD), px(self, Spacing.SM)),
         )
-        label.pack()
+        ttk.Label(self.header, text=title, style="CardTitle.TLabel").pack(side="left")
+        self.actions = ttk.Frame(self.header, style="Card.TFrame")
+        self.actions.pack(side="right")
 
-    def hide_tooltip(event):
-        nonlocal tooltip
-        if tooltip:
-            tooltip.destroy()
-            tooltip = None
-
-    widget.bind("<Enter>", show_tooltip)
-    widget.bind("<Leave>", hide_tooltip)
+        self.body = ttk.Frame(self.inner, style="Card.TFrame")
+        self.body.pack(fill="both", expand=True)
 
 
-def add_hover_effect(widget: tk.Widget, normal_bg: str, hover_bg: str):
-    """Add hover effect to a widget."""
-    widget.configure(background=normal_bg)
+# ─── Shared Widgets ───────────────────────────────────────────────────────────
 
-    def on_enter(event):
-        widget.configure(background=hover_bg)
 
-    def on_leave(event):
-        widget.configure(background=normal_bg)
-
-    widget.bind("<Enter>", on_enter)
-    widget.bind("<Leave>", on_leave)
+def style_tree_rows(tree: ttk.Treeview):
+    """Alternate row colour so wide CSV rows stay scannable."""
+    tree.tag_configure("odd", background=Colors.SURFACE_VARIANT)

@@ -3,7 +3,7 @@
 SAP CSV Merger — Merge daily SAP CSV files from shared folder.
 
 Usage: python sap_merge.py
-Requirements: Python 3.6+ (tkinter included by default)
+Requirements: Python 3.10+ (tkinter included by default)
 """
 
 import csv
@@ -12,13 +12,14 @@ import re
 import subprocess
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import TypedDict
 
-# Import theme
-from theme import Colors, Spacing, Theme
+from theme import Card, Colors, Theme, Typography, px, style_tree_rows
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -62,9 +63,40 @@ SYNTHETIC_HEADERS = [
 ]
 DATE_COLUMN_INDEX = 12  # Column M (0-indexed)
 APP_VERSION = "1.0.17"
+DATE_PRESETS = (("Today", "today"), ("7 days", "week"), ("Month", "month"))
+
+
+class UpdateInfo(TypedDict):
+    """Shape of a release lookup result."""
+
+    update_available: bool
+    latest_version: str
+    release_url: str
+    release_notes: str
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _enable_dpi_awareness() -> None:
+    """Let Windows draw at physical pixels; otherwise the window is bitmap-scaled.
+
+    Tk already scales fonts by the reported DPI, so only the window needs the
+    hint. Failures here cost sharpness, never the ability to start.
+    """
+    if os.name != "nt":
+        return
+    import ctypes
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        return
+    except (AttributeError, OSError):
+        # Windows 8.0 has no shcore: fall through to the legacy switch.
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except (AttributeError, OSError):
+            return
 
 
 def _is_folder_open_in_explorer(folder_path: str) -> bool:
@@ -341,18 +373,16 @@ class SAPFileHandler:
 
 
 class SAPMergerApp:
-    """Main GUI application for SAP CSV merging."""
+    """Main window: command bar, resizable workspace, action bar, status strip.
+
+    Layout is three panes the user resizes with the sashes:
+    date and source cards | SAP files, stacked over the CSV preview.
+    """
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("SAP CSV Merger")
-        self.root.geometry("950x680")
-        self.root.minsize(800, 550)
-
-        # Configure background
-        self.root.configure(bg=Colors.BACKGROUND)
-
-        # Apply theme
+        root.title("SAP CSV Merger")
+        root.configure(bg=Colors.BACKGROUND)
         Theme.configure(root)
 
         # Core components
@@ -363,414 +393,570 @@ class SAPMergerApp:
         self.merged_data: list[list[str]] | None = None
         self.tree_file_map: dict[str, Path] = {}  # tree iid -> file_path
 
-        # Setup UI
+        # Layout state
+        self._sash_placed = False
+        self._preview_expanded = False
+        self._preview_saved_sash = 0
+        self._fit_job: str | None = None
+        self._mono_font = tkfont.Font(
+            family=Typography.MONO_FAMILY, size=Typography.SIZE_SM
+        )
+
+        self._apply_window_geometry()
         self.create_widgets()
         self.update_connection_status()
 
-        # Check for updates after UI renders
+        self.root.bind("<Configure>", self._on_window_configure, add="+")
+        self.root.bind("<Destroy>", self._cancel_pending_fit, add="+")
         self.root.after(2000, self.check_for_updates)
 
+    # ── Layout primitives ─────────────────────────────────────────────────────
+
+    def _px(self, value: float) -> int:
+        return px(self.root, value)
+
+    def _apply_window_geometry(self):
+        """Open large enough for real data, shrunk to fit smaller displays."""
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        width = min(self._px(1460), screen_w - self._px(60))
+        height = min(self._px(980), screen_h - self._px(100))
+        x = max(0, (screen_w - width) // 2)
+        y = max(0, (screen_h - height) // 2 - self._px(20))
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.root.minsize(
+            min(self._px(860), screen_w),
+            min(self._px(600), screen_h),
+        )
+
     def create_widgets(self):
-        """Create all GUI widgets with modern styling."""
-        # Menu bar
+        """Build the window in reading order: chrome, filters, workspace, status."""
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(2, weight=1)
+
+        self._build_menu()
+        self._build_command_bar()
+        self._build_filter_bar()
+        self._build_workspace()
+        self._build_status_strip()
+
+    def _build_menu(self):
         menubar = tk.Menu(self.root)
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_command(label="Expand preview", command=self.toggle_preview_size)
+        view_menu.add_command(label="Reset layout", command=self.reset_layout)
+        menubar.add_cascade(label="View", menu=view_menu)
+
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="Check for Updates", command=self.check_for_updates)
         help_menu.add_command(label="About", command=self.show_about)
         menubar.add_cascade(label="Help", menu=help_menu)
         self.root.config(menu=menubar)
 
-        # Main container with padding
-        main_frame = ttk.Frame(self.root, padding=(Spacing.LG, Spacing.SM))
+    def _build_command_bar(self):
+        bar = tk.Frame(self.root, bg=Colors.CHROME)
+        bar.grid(row=0, column=0, sticky="ew")
+        bar.columnconfigure(1, weight=1)
 
-        # Configure grid weights
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(2, weight=1)  # csv preview — stretches
-        main_frame.grid(row=0, column=0, sticky="nsew")
-
-        # ── Compact Header Bar (Title + Network Connection) ──
-        header_bar = ttk.Frame(main_frame, style="Card.TFrame")
-        header_bar.grid(row=0, column=0, sticky="ew", pady=(0, Spacing.SM))
-        header_bar.columnconfigure(1, weight=1)  # spacer — pushes controls right
-
-        title_label = ttk.Label(
-            header_bar, text="SAP CSV Merger", style="TitleCard.TLabel"
+        brand = tk.Frame(bar, bg=Colors.CHROME)
+        brand.grid(
+            row=0, column=0, sticky="w", padx=(self._px(20), 0), pady=self._px(10)
         )
-        title_label.grid(row=0, column=0, sticky="w", padx=Spacing.LG, pady=Spacing.SM)
+        tk.Label(
+            brand,
+            text="SAP CSV Merger",
+            bg=Colors.CHROME,
+            fg=Colors.CHROME_TEXT,
+            font=Typography.TITLE,
+        ).pack(anchor="w")
+        tk.Label(
+            brand,
+            text="iSAP_IF   ·   FYBPL004 daily files",
+            bg=Colors.CHROME,
+            fg=Colors.CHROME_MUTED,
+            font=Typography.CAPTION,
+        ).pack(anchor="w", pady=(self._px(2), 0))
 
-        self.status_indicator = tk.Canvas(
-            header_bar,
-            width=12,
-            height=12,
-            highlightthickness=0,
-            bg=Colors.DISCONNECTED,
+        self.status_chip = tk.Frame(bar, bg=Colors.SURFACE)
+        self.status_chip.grid(row=0, column=2, padx=(0, self._px(16)))
+        self.status_dot = tk.Label(
+            self.status_chip, text="●", font=Typography.CAPTION, bg=Colors.SURFACE
         )
-        self.status_indicator.grid(
-            row=0, column=2, padx=(0, Spacing.SM), pady=Spacing.SM
+        self.status_dot.pack(
+            side="left", padx=(self._px(10), self._px(6)), pady=self._px(4)
         )
+        self.status_label = tk.Label(
+            self.status_chip,
+            text="Disconnected",
+            font=Typography.UI_BOLD,
+            bg=Colors.SURFACE,
+            fg=Colors.ERROR,
+        )
+        self.status_label.pack(side="left", padx=(0, self._px(10)))
 
-        self.status_label = ttk.Label(
-            header_bar, text="Disconnected", style="Label.TLabel"
-        )
-        self.status_label.grid(row=0, column=3, padx=(0, Spacing.XL), pady=Spacing.SM)
-
-        btn_frame = ttk.Frame(header_bar, style="Card.TFrame")
-        btn_frame.grid(
-            row=0, column=4, sticky="e", padx=(0, Spacing.LG), pady=Spacing.SM
-        )
+        actions = tk.Frame(bar, bg=Colors.CHROME)
+        actions.grid(row=0, column=3, sticky="e", padx=(0, self._px(20)))
 
         self.connect_btn = ttk.Button(
-            btn_frame,
+            actions,
             text="Connect",
             style="Primary.TButton",
             command=self.connect_drive,
         )
-        self.connect_btn.grid(row=0, column=0, padx=(0, Spacing.SM))
+        self.connect_btn.pack(side="left", padx=(0, self._px(8)))
 
         self.disconnect_btn = ttk.Button(
-            btn_frame,
+            actions,
             text="Disconnect",
-            style="Danger.TButton",
+            style="ChromeOutline.TButton",
             command=self.disconnect_drive,
             state="disabled",
         )
-        self.disconnect_btn.grid(row=0, column=1, padx=(0, Spacing.SM))
+        self.disconnect_btn.pack(side="left", padx=(0, self._px(8)))
 
         self.scan_btn = ttk.Button(
-            btn_frame,
-            text="Scan Folder",
-            style="Accent.TButton",
+            actions,
+            text="Scan folder",
+            style="ChromeOutline.TButton",
             command=self.scan_folder,
         )
-        self.scan_btn.grid(row=0, column=2)
+        self.scan_btn.pack(side="left")
 
-        # ── Mid Section: Date Range + Available Files (two-column) ──
-        mid_row = ttk.Frame(main_frame)
-        mid_row.grid(row=1, column=0, sticky="ew", pady=(0, Spacing.SM))
-        mid_row.columnconfigure(0, weight=1)
-        mid_row.columnconfigure(1, weight=1)
+    def _build_workspace(self):
+        body = ttk.Frame(self.root, style="App.TFrame")
+        body.grid(row=2, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
 
-        # ═══ Date Range Card (left column) ═══
-        date_card = ttk.Frame(mid_row, style="Card.TFrame")
-        date_card.grid(row=0, column=0, sticky="ew", padx=(0, Spacing.SM))
-        # Card header
-        date_header = ttk.Label(date_card, text="Date Range", style="Subheader.TLabel")
-        date_header.grid(
+        self.vsplit = ttk.PanedWindow(body, orient="vertical")
+        self.vsplit.grid(
             row=0,
             column=0,
-            columnspan=5,
-            sticky="w",
-            padx=Spacing.LG,
-            pady=(Spacing.SM, Spacing.XS),
-        )
-        # Separator
-        ttk.Separator(date_card, orient="horizontal").grid(
-            row=1, column=0, columnspan=5, sticky="ew", padx=Spacing.LG
+            sticky="nsew",
+            padx=self._px(14),
+            pady=(self._px(12), 0),
         )
 
-        date_content = ttk.Frame(date_card, style="Card.TFrame")
-        date_content.grid(
-            row=2,
-            column=0,
-            columnspan=5,
-            sticky="ew",
-            padx=Spacing.LG,
-            pady=(Spacing.SM, Spacing.XS),
-        )
+        self.files_card = Card(self.vsplit, "SAP files")
+        self.preview_card = Card(self.vsplit, "CSV preview")
+        self.vsplit.add(self.files_card, weight=1)
+        self.vsplit.add(self.preview_card, weight=1)
 
-        # Current date for defaults
+        # Tk 8.6 panes have weight only: keep both usable by clamping the sash.
+        self._vsplit_min = (self._px(180), self._px(170))
+        for sequence in ("<Configure>", "<ButtonRelease-1>"):
+            self.vsplit.bind(
+                sequence,
+                lambda event: self._clamp_split(self.vsplit, self._vsplit_min),
+                add="+",
+            )
+
+        self._build_files_card()
+        self._build_preview_card()
+        self._build_action_bar(body)
+
+    def _build_filter_bar(self):
+        """Date range, quick ranges and Detect live above the tables."""
+        wrap = tk.Frame(self.root, bg=Colors.BORDER)
+        wrap.grid(row=1, column=0, sticky="ew")
+        bar = ttk.Frame(wrap, style="Card.TFrame")
+        bar.pack(fill="x", pady=(0, 1))  # the wrap shows through as a hairline
+
+        pad = self._px(9)
         now = datetime.now()
-
-        # From date
-        from_frame = ttk.Frame(date_content, style="Card.TFrame")
-        from_frame.grid(row=0, column=0, sticky="w")
-
-        ttk.Label(from_frame, text="From", style="Label.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w"
-        )
-
-        # Year dropdown
         self.start_year_var = tk.StringVar(value=str(now.year))
-        self.start_year_cb = ttk.Combobox(
-            from_frame,
-            textvariable=self.start_year_var,
-            values=[str(y) for y in range(2020, 2030)],
-            width=6,
-            state="readonly",
-        )
-        self.start_year_cb.grid(row=1, column=0, padx=(0, Spacing.XS))
-
-        # Month dropdown
         self.start_month_var = tk.StringVar(value=f"{now.month:02d}")
-        self.start_month_cb = ttk.Combobox(
-            from_frame,
-            textvariable=self.start_month_var,
-            values=[f"{m:02d}" for m in range(1, 13)],
-            width=4,
-            state="readonly",
-        )
-        self.start_month_cb.grid(row=1, column=1, padx=(0, Spacing.XS))
-
-        # Day dropdown
         self.start_day_var = tk.StringVar(value=f"{now.day:02d}")
-        self.start_day_cb = ttk.Combobox(
-            from_frame,
-            textvariable=self.start_day_var,
-            values=[f"{d:02d}" for d in range(1, 32)],
-            width=4,
-            state="readonly",
-        )
-        self.start_day_cb.grid(row=1, column=2)
-
-        ttk.Label(from_frame, text="YYYY  MM  DD", style="LabelSm.TLabel").grid(
-            row=2, column=0, columnspan=3, sticky="w"
-        )
-
-        # Arrow separator
-        ttk.Label(date_content, text="→", style="Header.TLabel").grid(
-            row=0, column=1, padx=Spacing.XL
-        )
-
-        # To date
-        to_frame = ttk.Frame(date_content, style="Card.TFrame")
-        to_frame.grid(row=0, column=2, sticky="w")
-
-        ttk.Label(to_frame, text="To", style="Label.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w"
-        )
-
-        # Year dropdown
         self.end_year_var = tk.StringVar(value=str(now.year))
-        self.end_year_cb = ttk.Combobox(
-            to_frame,
-            textvariable=self.end_year_var,
-            values=[str(y) for y in range(2020, 2030)],
-            width=6,
-            state="readonly",
-        )
-        self.end_year_cb.grid(row=1, column=0, padx=(0, Spacing.XS))
-
-        # Month dropdown
         self.end_month_var = tk.StringVar(value=f"{now.month:02d}")
-        self.end_month_cb = ttk.Combobox(
-            to_frame,
-            textvariable=self.end_month_var,
-            values=[f"{m:02d}" for m in range(1, 13)],
-            width=4,
-            state="readonly",
-        )
-        self.end_month_cb.grid(row=1, column=1, padx=(0, Spacing.XS))
-
-        # Day dropdown
         self.end_day_var = tk.StringVar(value=f"{now.day:02d}")
-        self.end_day_cb = ttk.Combobox(
-            to_frame,
-            textvariable=self.end_day_var,
-            values=[f"{d:02d}" for d in range(1, 32)],
-            width=4,
-            state="readonly",
-        )
-        self.end_day_cb.grid(row=1, column=2)
 
-        ttk.Label(to_frame, text="YYYY  MM  DD", style="LabelSm.TLabel").grid(
-            row=2, column=0, columnspan=3, sticky="w"
+        self._date_group(
+            bar, "From", self.start_year_var, self.start_month_var, self.start_day_var
+        ).pack(side="left", padx=(self._px(16), 0), pady=pad)
+
+        ttk.Label(bar, text="→", style="CardMeta.TLabel").pack(
+            side="left", padx=self._px(6), pady=pad
         )
 
-        # Detect and Clear buttons
-        detect_frame = ttk.Frame(date_content)
-        detect_frame.grid(row=0, column=3, padx=(Spacing.XL, 0))
+        self._date_group(
+            bar, "To", self.end_year_var, self.end_month_var, self.end_day_var
+        ).pack(side="left", pady=pad)
+
+        ttk.Separator(bar, orient="vertical").pack(
+            side="left", fill="y", padx=self._px(12), pady=self._px(8)
+        )
+
+        for label, preset in DATE_PRESETS:
+            ttk.Button(
+                bar,
+                text=label,
+                style="Segment.TButton",
+                command=lambda name=preset: self.apply_date_preset(name),
+            ).pack(side="left", padx=(0, self._px(6)), pady=pad)
 
         self.detect_btn = ttk.Button(
-            detect_frame,
-            text="Detect Files",
+            bar,
+            text="Detect files",
             style="Primary.TButton",
             command=self.detect_files,
         )
-        self.detect_btn.grid(row=0, column=0, padx=(0, Spacing.SM))
+        self.detect_btn.pack(side="left", padx=(self._px(10), 0), pady=pad)
 
-        self.clear_date_btn = ttk.Button(
-            detect_frame,
-            text="Clear Dates",
-            style="Warning.TButton",
-            command=self.clear_dates,
+    def _date_group(self, parent: tk.Misc, label: str, year, month, day) -> ttk.Frame:
+        group = ttk.Frame(parent, style="Card.TFrame")
+        ttk.Label(group, text=label, style="FieldLabel.TLabel").pack(
+            side="left", padx=(0, self._px(8))
         )
-        self.clear_date_btn.grid(row=0, column=1)
-
-        # ═══ Available Files Card (right column) ═══
-        file_card = ttk.Frame(mid_row, style="Card.TFrame")
-        file_card.grid(row=0, column=1, sticky="nsew", padx=(Spacing.SM, 0))
-        file_card.columnconfigure(0, weight=1)
-        file_card.rowconfigure(2, weight=1)
-
-        # Card header
-        file_header = ttk.Label(file_card, text="SAP Files", style="CardHeader.TLabel")
-        file_header.grid(
-            row=0, column=0, sticky="w", padx=Spacing.MD, pady=(Spacing.MD, Spacing.XS)
+        now = datetime.now()
+        fields = (
+            (year, [str(y) for y in range(now.year - 10, now.year + 2)], 6),
+            (month, [f"{m:02d}" for m in range(1, 13)], 4),
+            (day, [f"{d:02d}" for d in range(1, 32)], 4),
         )
+        for var, values, width in fields:
+            ttk.Combobox(
+                group,
+                textvariable=var,
+                values=values,
+                width=width,
+                state="readonly",
+            ).pack(side="left", padx=(0, self._px(6)))
+        return group
 
-        # Separator
-        ttk.Separator(file_card, orient="horizontal").grid(
-            row=1, column=0, sticky="ew", padx=Spacing.LG
+    def _build_files_card(self):
+        card = self.files_card
+        self.file_count_label = ttk.Label(
+            card.actions, text="0 files", style="Pill.TLabel"
         )
+        self.file_count_label.pack(side="right")
 
-        # File treeview with scrollbar
-        tree_container = ttk.Frame(file_card)
-        tree_container.grid(
-            row=2, column=0, sticky="nsew", padx=Spacing.MD, pady=Spacing.SM
+        body = card.body
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        table = ttk.Frame(body, style="Card.TFrame")
+        table.grid(
+            row=0, column=0, sticky="nsew", padx=self._px(12), pady=(0, self._px(10))
         )
-        tree_container.columnconfigure(0, weight=1)
-        tree_container.rowconfigure(0, weight=1)
+        table.columnconfigure(0, weight=1)
+        table.rowconfigure(0, weight=1)
 
         self.file_tree = ttk.Treeview(
-            tree_container,
-            columns=("date", "source"),
+            table,
+            columns=("date", "folder"),
             show="tree headings",
             selectmode="extended",
-            height=6,
         )
-        self.file_tree.heading("#0", text="Filename")
-        self.file_tree.heading("date", text="Date")
-        self.file_tree.heading("source", text="Source")
-        self.file_tree.column("#0", width=160, minwidth=100)
-        self.file_tree.column("date", width=90, minwidth=70)
-        self.file_tree.column("source", width=100, minwidth=80)
+        self.file_tree.heading("#0", text="File", anchor="w")
+        self.file_tree.heading("date", text="Date", anchor="w")
+        self.file_tree.heading("folder", text="Folder", anchor="w")
+        self.file_tree.column(
+            "#0", width=self._px(240), minwidth=self._px(160), stretch=True
+        )
+        self.file_tree.column(
+            "date",
+            width=self._px(92),
+            minwidth=self._px(80),
+            anchor="w",
+            stretch=False,
+        )
+        self.file_tree.column(
+            "folder",
+            width=self._px(120),
+            minwidth=self._px(90),
+            anchor="w",
+            stretch=False,
+        )
         self.file_tree.grid(row=0, column=0, sticky="nsew")
 
-        tree_scrollbar = ttk.Scrollbar(
-            tree_container, orient="vertical", command=self.file_tree.yview
+        yscroll = ttk.Scrollbar(table, orient="vertical", command=self.file_tree.yview)
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll = ttk.Scrollbar(
+            table, orient="horizontal", command=self.file_tree.xview
         )
-        tree_scrollbar.grid(row=0, column=1, sticky="ns")
-        self.file_tree.configure(yscrollcommand=tree_scrollbar.set)
-
-        tree_scrollbar_x = ttk.Scrollbar(
-            tree_container, orient="horizontal", command=self.file_tree.xview
-        )
-        tree_scrollbar_x.grid(row=1, column=0, sticky="ew")
-        self.file_tree.configure(xscrollcommand=tree_scrollbar_x.set)
-
+        xscroll.grid(row=1, column=0, sticky="ew")
+        self.file_tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        style_tree_rows(self.file_tree)
+        self.file_tree.tag_configure("folder", foreground=Colors.TEXT_SECONDARY)
         self.file_tree.bind("<<TreeviewSelect>>", self.on_file_select)
 
-        # File count label
-        self.file_count_label = ttk.Label(
-            file_card, text="0 files", style="Caption.TLabel"
+        self.files_hint = tk.Label(
+            table,
+            text="No files loaded — press Scan folder",
+            bg=Colors.SURFACE,
+            fg=Colors.TEXT_MUTED,
+            font=Typography.UI,
         )
-        self.file_count_label.grid(
-            row=3, column=0, sticky="w", padx=Spacing.MD, pady=(Spacing.XS, Spacing.SM)
-        )
+        self.files_hint.place(relx=0.5, rely=0.5, anchor="center")
 
-        # ── CSV Preview Section (full-width below) ──
-        preview_card = ttk.Frame(main_frame, style="Card.TFrame")
-        preview_card.grid(row=2, column=0, sticky="nsew", pady=(0, Spacing.SM))
-        preview_card.columnconfigure(0, weight=1)
-        preview_card.rowconfigure(2, weight=1)
+    def _build_preview_card(self):
+        card = self.preview_card
+        self.preview_info_label = ttk.Label(
+            card.header, text="No file selected", style="CardMeta.TLabel"
+        )
+        self.preview_info_label.pack(side="left", padx=(self._px(10), 0))
 
-        # Card header
-        preview_header = ttk.Label(
-            preview_card, text="CSV Preview", style="CardHeader.TLabel"
+        self.expand_btn = ttk.Button(
+            card.actions,
+            text="Expand",
+            style="Ghost.TButton",
+            command=self.toggle_preview_size,
         )
-        preview_header.grid(
-            row=0, column=0, sticky="w", padx=Spacing.MD, pady=(Spacing.MD, Spacing.SM)
-        )
+        self.expand_btn.pack(side="right")
 
-        # Separator
-        ttk.Separator(preview_card, orient="horizontal").grid(
-            row=1, column=0, sticky="ew", padx=Spacing.LG
+        self.fit_columns_var = tk.BooleanVar(value=True)
+        self.fit_columns = ttk.Checkbutton(
+            card.actions,
+            text="Fit columns",
+            variable=self.fit_columns_var,
+            style="Tool.TCheckbutton",
+            command=self._fit_preview_columns,
         )
+        self.fit_columns.pack(side="right", padx=(0, self._px(8)))
 
-        # Treeview for preview
-        tree_container = ttk.Frame(preview_card)
-        tree_container.grid(
-            row=2, column=0, sticky="nsew", padx=Spacing.MD, pady=Spacing.MD
+        body = card.body
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        table = ttk.Frame(body, style="Card.TFrame")
+        table.grid(
+            row=0, column=0, sticky="nsew", padx=self._px(12), pady=(0, self._px(10))
         )
-        tree_container.columnconfigure(0, weight=1)
-        tree_container.rowconfigure(0, weight=1)
+        table.columnconfigure(0, weight=1)
+        table.rowconfigure(0, weight=1)
 
         self.preview_tree = ttk.Treeview(
-            tree_container, columns=SYNTHETIC_HEADERS, show="headings", height=20
+            table, columns=SYNTHETIC_HEADERS, show="headings"
         )
-
         for header in SYNTHETIC_HEADERS:
             self.preview_tree.heading(header, text=header)
-            self.preview_tree.column(header, width=70, minwidth=50)
-
+            self.preview_tree.column(
+                header,
+                width=self._px(92),
+                minwidth=self._px(40),
+                anchor="w",
+                stretch=False,
+            )
         self.preview_tree.grid(row=0, column=0, sticky="nsew")
 
-        tree_scrollbar_y = ttk.Scrollbar(
-            tree_container, orient="vertical", command=self.preview_tree.yview
+        yscroll = ttk.Scrollbar(
+            table, orient="vertical", command=self.preview_tree.yview
         )
-        tree_scrollbar_y.grid(row=0, column=1, sticky="ns")
-        self.preview_tree.configure(yscrollcommand=tree_scrollbar_y.set)
-
-        tree_scrollbar_x = ttk.Scrollbar(
-            tree_container, orient="horizontal", command=self.preview_tree.xview
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll = ttk.Scrollbar(
+            table, orient="horizontal", command=self.preview_tree.xview
         )
-        tree_scrollbar_x.grid(row=1, column=0, sticky="ew")
-
-        # Preview info label
-        self.preview_info_label = ttk.Label(
-            preview_card, text="Select a file to preview", style="Caption.TLabel"
+        xscroll.grid(row=1, column=0, sticky="ew")
+        self.preview_tree.configure(
+            yscrollcommand=yscroll.set, xscrollcommand=xscroll.set
         )
-        self.preview_info_label.grid(
-            row=3, column=0, sticky="w", padx=Spacing.MD, pady=(Spacing.XS, Spacing.SM)
+        style_tree_rows(self.preview_tree)
+        self.preview_tree.bind("<Configure>", self._schedule_fit)
+
+        self.preview_hint = tk.Label(
+            table,
+            text="Select a file to preview its first 10 rows",
+            bg=Colors.SURFACE,
+            fg=Colors.TEXT_MUTED,
+            font=Typography.UI,
         )
+        self.preview_hint.place(relx=0.5, rely=0.5, anchor="center")
 
-        # ── Action Buttons Section ──
-        action_frame = ttk.Frame(main_frame, style="Surface.TFrame")
-        action_frame.grid(row=3, column=0, sticky="ew", pady=(Spacing.MD, 0))
+    def _build_action_bar(self, body: tk.Misc):
+        footer = ttk.Frame(body, style="App.TFrame")
+        footer.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            padx=self._px(14),
+            pady=(self._px(10), self._px(12)),
+        )
+        footer.columnconfigure(0, weight=1)
 
-        # Left side - merge info
-        self.merge_info_label = ttk.Label(action_frame, text="", style="Body.TLabel")
+        self.merge_info_label = ttk.Label(footer, text="", style="Body.TLabel")
         self.merge_info_label.grid(row=0, column=0, sticky="w")
 
-        # Right side - action buttons
-        btn_container = ttk.Frame(action_frame)
-        btn_container.grid(row=0, column=1, sticky="e")
+        buttons = ttk.Frame(footer, style="App.TFrame")
+        buttons.grid(row=0, column=1, sticky="e")
 
         self.merge_btn = ttk.Button(
-            btn_container,
-            text="Merge Selected Files",
+            buttons,
+            text="Merge selected",
             style="Success.TButton",
             command=self.merge_files,
         )
-        self.merge_btn.grid(row=0, column=0, padx=(0, Spacing.SM))
+        self.merge_btn.pack(side="left", padx=(0, self._px(8)))
 
         self.export_btn = ttk.Button(
-            btn_container,
-            text="Export Merged File",
+            buttons,
+            text="Export merged",
             style="Primary.TButton",
             command=self.export_file,
             state="disabled",
         )
-        self.export_btn.grid(row=0, column=1, padx=(0, Spacing.SM))
+        self.export_btn.pack(side="left", padx=(0, self._px(8)))
 
         self.clear_btn = ttk.Button(
-            btn_container,
-            text="Clear All",
-            style="Danger.TButton",
+            buttons,
+            text="Clear all",
+            style="DangerOutline.TButton",
             command=self.clear_all,
         )
-        self.clear_btn.grid(row=0, column=2)
-        # ── Status Bar ──
-        status_frame = ttk.Frame(main_frame, style="Card.TFrame")
-        status_frame.grid(row=4, column=0, sticky="ew", pady=(Spacing.MD, 0))
+        self.clear_btn.pack(side="left")
 
-        self.status_bar = ttk.Label(status_frame, text="Ready", style="Status.TLabel")
-        self.status_bar.grid(
-            row=0, column=0, sticky="ew", padx=Spacing.SM, pady=Spacing.XS
+    def _build_status_strip(self):
+        strip = tk.Frame(self.root, bg=Colors.SURFACE_VARIANT)
+        strip.grid(row=3, column=0, sticky="ew")
+        tk.Frame(strip, bg=Colors.BORDER, height=1).pack(fill="x")
+
+        inner = tk.Frame(strip, bg=Colors.SURFACE_VARIANT)
+        inner.pack(fill="x", padx=self._px(16), pady=self._px(5))
+
+        self.status_bar = tk.Label(
+            inner,
+            text="Ready",
+            bg=Colors.SURFACE_VARIANT,
+            fg=Colors.TEXT_SECONDARY,
+            font=Typography.CAPTION,
+            anchor="w",
         )
+        self.status_bar.pack(side="left")
+        tk.Label(
+            inner,
+            text=f"v{APP_VERSION}",
+            bg=Colors.SURFACE_VARIANT,
+            fg=Colors.TEXT_MUTED,
+            font=Typography.CAPTION,
+        ).pack(side="right")
+
+    # ── Pane sizing ───────────────────────────────────────────────────────────
+
+    def _clamp_split(self, paned: ttk.PanedWindow, minimums: tuple[int, int]):
+        """Keep both panes usable; ttk lets the sash sit anywhere."""
+        total = (
+            paned.winfo_height()
+            if str(paned.cget("orient")) == "vertical"
+            else paned.winfo_width()
+        )
+        if total <= 1:
+            return
+        first_min, second_min = minimums
+        position = self._sash(paned, 0)
+        clamped = max(first_min, min(position, total - second_min - self._px(10)))
+        if clamped != position:
+            self._set_sash(paned, 0, clamped)
+
+    def _sash(self, paned: ttk.PanedWindow, index: int) -> int:
+        try:
+            return int(paned.tk.call(str(paned), "sashpos", index))
+        except (tk.TclError, ValueError):
+            return 0
+
+    def _set_sash(self, paned: ttk.PanedWindow, index: int, position: int):
+        paned.tk.call(str(paned), "sashpos", index, int(position))
+
+    def _on_window_configure(self, event: tk.Event):
+        """Place the sash once, after the panes have a real size."""
+        if event.widget is not self.root:
+            return
+        if self._sash_placed or self.vsplit.winfo_height() < self._px(320):
+            return
+        self._sash_placed = True
+        self.root.after_idle(self.reset_layout)
+
+    def reset_layout(self):
+        """Restore the default even split between files and preview."""
+        self._set_sash(self.vsplit, 0, int(self.vsplit.winfo_height() * 0.5))
+        self._preview_expanded = False
+        self.expand_btn.configure(text="Expand")
+        self._fit_preview_columns()
+
+    def toggle_preview_size(self):
+        """Give the preview every available pixel, or return to the split."""
+        if self._preview_expanded:
+            self._set_sash(self.vsplit, 0, self._preview_saved_sash)
+            self._preview_expanded = False
+            self.expand_btn.configure(text="Expand")
+            return
+
+        self._preview_saved_sash = self._sash(self.vsplit, 0)
+        self._set_sash(self.vsplit, 0, self._vsplit_min[0])
+        self._preview_expanded = True
+        self.expand_btn.configure(text="Restore")
+
+    def _cancel_pending_fit(self, event: tk.Event):
+        """Drop a queued refit; a timer outliving the window is a Tcl error."""
+        if event.widget is not self.root or self._fit_job is None:
+            return
+        self.root.after_cancel(self._fit_job)
+        self._fit_job = None
+
+    def _schedule_fit(self, event: tk.Event | None = None):
+        """Refit columns after a resize settles, not on every pixel."""
+        if event is not None and event.widget is not self.preview_tree:
+            return
+        if not self.fit_columns_var.get():
+            return
+        if self._fit_job is not None:
+            self.root.after_cancel(self._fit_job)
+        self._fit_job = self.root.after(90, self._fit_preview_columns)
+
+    def _fit_preview_columns(self):
+        """Size each column to its widest visible value, then share spare width."""
+        self._fit_job = None
+        tree = self.preview_tree
+        if not self.fit_columns_var.get():
+            for header in SYNTHETIC_HEADERS:
+                tree.column(header, width=self._px(92))
+            return
+
+        available = tree.winfo_width()
+        if available <= 1:
+            return
+
+        padding = self._px(22)
+        rows = [tree.item(iid, "values") for iid in tree.get_children()[:12]]
+        widths = []
+        for index, header in enumerate(SYNTHETIC_HEADERS):
+            width = self._mono_font.measure(header) + padding
+            for values in rows:
+                if index < len(values):
+                    width = max(
+                        width, self._mono_font.measure(str(values[index])) + padding
+                    )
+            widths.append(min(max(width, self._px(46)), self._px(260)))
+
+        total = sum(widths)
+        if total < available:
+            extra = (available - total) // len(widths)
+            widths = [width + extra for width in widths]
+
+        for header, width in zip(SYNTHETIC_HEADERS, widths, strict=True):
+            tree.column(header, width=width, minwidth=self._px(40))
+
+    # ── Connection state ──────────────────────────────────────────────────────
+
+    def _set_status_chip(self, state: str, text: str):
+        palette = {
+            "connected": (Colors.SUCCESS_LIGHT, Colors.SUCCESS),
+            "connecting": (Colors.WARNING_LIGHT, Colors.WARNING),
+            "disconnected": (Colors.ERROR_LIGHT, Colors.ERROR),
+        }
+        background, foreground = palette[state]
+        for widget in (self.status_chip, self.status_dot, self.status_label):
+            widget.configure(bg=background)
+        self.status_dot.configure(fg=foreground)
+        self.status_label.configure(text=text, fg=foreground)
 
     def update_connection_status(self):
-        """Update connection status display with visual indicator."""
+        """Reflect whether the SAP share is reachable."""
         if self.network_manager.check_connection():
-            self.status_indicator.configure(bg=Colors.CONNECTED)
-            self.status_label.configure(text="Connected", style="Success.TLabel")
+            self._set_status_chip("connected", "Connected")
             self.connect_btn.configure(state="disabled")
             self.disconnect_btn.configure(state="normal")
         else:
-            self.status_indicator.configure(bg=Colors.DISCONNECTED)
-            self.status_label.configure(text="Disconnected", style="Error.TLabel")
+            self._set_status_chip("disconnected", "Disconnected")
             self.connect_btn.configure(state="normal")
             self.disconnect_btn.configure(state="disabled")
 
@@ -778,10 +964,7 @@ class SAPMergerApp:
         """Connect to network drive."""
         self.set_status("Connecting...")
         self.connect_btn.configure(state="disabled")
-
-        # Update UI to show connecting state
-        self.status_indicator.configure(bg=Colors.WARNING)
-        self.status_label.configure(text="Connecting...", style="Warning.TLabel")
+        self._set_status_chip("connecting", "Connecting...")
 
         success, message = self.network_manager.connect()
         self.update_connection_status()
@@ -818,6 +1001,8 @@ class SAPMergerApp:
         self.set_status(message)
         self.clear_all()
 
+    # ── File detection ────────────────────────────────────────────────────────
+
     def scan_folder(self):
         """Scan folder for SAP CSV files."""
         self.set_status("Scanning folder...")
@@ -827,41 +1012,58 @@ class SAPMergerApp:
         if success:
             self.set_status(message)
             self.populate_file_tree()
-            self.file_count_label.configure(text=f"{len(dates)} files found")
+            self.file_count_label.configure(text=f"{len(dates)} files")
         else:
             self.set_status(message)
             messagebox.showerror("Scan Error", message)
 
     def populate_file_tree(self):
         """Populate file treeview with detected files from main and archive folders."""
-        # Clear tree
+        self.files_hint.place_forget()
         for item in self.file_tree.get_children():
             self.file_tree.delete(item)
         self.tree_file_map.clear()
         self.selected_files.clear()
 
-        # Add root node
-        self.file_tree.insert("", "end", iid="root", text="📁 iSAP_IF", open=True)
-
-        # Add current files node
-        self.file_tree.insert(
-            "root", "end", iid="current_files", text="📁 Current SAP Files", open=True
-        )
-
-        # Add archive folder nodes (sorted descending — newest first)
-        for folder in sorted(self.file_handler.archive_folders, reverse=True):
+        current_dates = [
+            date_str
+            for date_str in self.found_dates
+            if self.file_handler.file_sources.get(date_str, "") == ""
+        ]
+        if current_dates:
             self.file_tree.insert(
-                "root", "end", iid=f"folder_{folder}", text=f"📁 {folder}", open=False
+                "",
+                "end",
+                iid="current_files",
+                text=f"Current folder ({len(current_dates)})",
+                open=True,
+                tags=("folder",),
             )
 
-        # Add file nodes
-        for date_str in self.found_dates:
+        for folder in sorted(self.file_handler.archive_folders, reverse=True):
+            count = sum(
+                1
+                for date_str in self.found_dates
+                if self.file_handler.file_sources.get(date_str, "") == folder
+            )
+            if count == 0:
+                continue
+            self.file_tree.insert(
+                "",
+                "end",
+                iid=f"folder_{folder}",
+                text=f"Archive {folder} ({count})",
+                open=False,
+                tags=("folder",),
+            )
+
+        for index, date_str in enumerate(self.found_dates):
             display_date = datetime.strptime(date_str, DATE_FORMAT).strftime(
                 DATE_DISPLAY_FORMAT
             )
             file_path = self.file_handler.files.get(date_str)
             source = self.file_handler.file_sources.get(date_str, "")
-            source_display = "Main folder" if source == "" else f"Archive: {source}"
+            source_display = "Main" if source == "" else source
 
             parent = "current_files" if source == "" else f"folder_{source}"
             iid = f"file_{date_str}"
@@ -871,8 +1073,18 @@ class SAPMergerApp:
                 iid=iid,
                 text=file_path.name,
                 values=(display_date, source_display),
+                tags=("odd",) if index % 2 else (),
             )
             self.tree_file_map[iid] = file_path
+
+        if not self.found_dates:
+            self.file_tree.insert(
+                "",
+                "end",
+                iid="empty",
+                text="No SAP files found in the scanned folder",
+                tags=("folder",),
+            )
 
         # Auto-select all files
         if self.tree_file_map:
@@ -937,7 +1149,7 @@ class SAPMergerApp:
 
         total = len(files_in_range)
         self.file_count_label.configure(
-            text=f"{found_count} of {total} files found ({missing_count} missing)"
+            text=f"{found_count} of {total} found · {missing_count} missing"
         )
         self.set_status(f"Found {found_count} files in range ({missing_count} missing)")
 
@@ -947,7 +1159,7 @@ class SAPMergerApp:
         if not selection:
             return
 
-        # Filter to file nodes only (skip root and folder nodes)
+        # Filter to file nodes only (skip folder nodes)
         file_iids = [iid for iid in selection if iid.startswith("file_")]
         self.selected_files = [
             self.tree_file_map[iid] for iid in file_iids if iid in self.tree_file_map
@@ -960,7 +1172,9 @@ class SAPMergerApp:
                 self.show_preview(file_path)
             else:
                 self.clear_preview()
-                self.preview_info_label.configure(text="File not available")
+                self.preview_info_label.configure(
+                    text=f"{file_path.name} · not available", style="CardWarning.TLabel"
+                )
         else:
             self.clear_preview()
 
@@ -976,26 +1190,33 @@ class SAPMergerApp:
         headers, rows = self.file_handler.read_csv_preview(file_path)
 
         # Insert rows into treeview
-        for row in rows:
-            self.preview_tree.insert("", "end", values=row)
+        for index, row in enumerate(rows):
+            self.preview_tree.insert(
+                "", "end", values=row, tags=("odd",) if index % 2 else ()
+            )
 
-        # Update info label
         if valid:
             self.preview_info_label.configure(
-                text=f"{file_path.name}  •  {len(rows)} rows shown", style="Body.TLabel"
+                text=f"{file_path.name} · {len(rows)} rows shown",
+                style="CardMeta.TLabel",
             )
         else:
             self.preview_info_label.configure(
-                text=f"{file_path.name}  •  {message}", style="Warning.TLabel"
+                text=f"{file_path.name} · {message}", style="CardWarning.TLabel"
             )
+        self.preview_hint.place_forget()
+        self._fit_preview_columns()
 
     def clear_preview(self):
         """Clear preview treeview."""
         for item in self.preview_tree.get_children():
             self.preview_tree.delete(item)
         self.preview_info_label.configure(
-            text="Select a file to preview", style="Caption.TLabel"
+            text="No file selected", style="CardMeta.TLabel"
         )
+        self.preview_hint.place(relx=0.5, rely=0.5, anchor="center")
+
+    # ── Merge and export ──────────────────────────────────────────────────────
 
     def merge_files(self):
         """Merge selected files."""
@@ -1053,15 +1274,42 @@ class SAPMergerApp:
             self.set_status(error_msg)
             messagebox.showerror("Export Error", error_msg)
 
+    # ── Dates, clearing, status ───────────────────────────────────────────────
+
+    @staticmethod
+    def _set_date_fields(year, month, day, value: datetime):
+        year.set(str(value.year))
+        month.set(f"{value.month:02d}")
+        day.set(f"{value.day:02d}")
+
+    def apply_date_preset(self, preset: str):
+        """Fill both date fields from a common range in one click."""
+        today = datetime.now()
+        if preset == "week":
+            start = today - timedelta(days=6)
+        elif preset == "month":
+            start = today.replace(day=1)
+        else:
+            start = today
+
+        for prefix, value in (("start", start), ("end", today)):
+            self._set_date_fields(
+                getattr(self, f"{prefix}_year_var"),
+                getattr(self, f"{prefix}_month_var"),
+                getattr(self, f"{prefix}_day_var"),
+                value,
+            )
+        self.set_status(f"Range set to {start:%Y-%m-%d} → {today:%Y-%m-%d}")
+
     def clear_dates(self):
-        """Clear date range selections to current date."""
+        """Reset the range to today."""
         now = datetime.now()
-        self.start_year_var.set(str(now.year))
-        self.start_month_var.set(f"{now.month:02d}")
-        self.start_day_var.set(f"{now.day:02d}")
-        self.end_year_var.set(str(now.year))
-        self.end_month_var.set(f"{now.month:02d}")
-        self.end_day_var.set(f"{now.day:02d}")
+        self._set_date_fields(
+            self.start_year_var, self.start_month_var, self.start_day_var, now
+        )
+        self._set_date_fields(
+            self.end_year_var, self.end_month_var, self.end_day_var, now
+        )
         self.set_status("Dates reset to today")
 
     def clear_all(self):
@@ -1079,6 +1327,8 @@ class SAPMergerApp:
         """Update status bar."""
         self.status_bar.configure(text=message)
 
+    # ── Updates and dialogs ───────────────────────────────────────────────────
+
     def check_for_updates(self, silent: bool = False):
         """Check GitHub for updates. silent=True = no dialog if already current."""
 
@@ -1090,7 +1340,7 @@ class SAPMergerApp:
         threading.Thread(target=_check, daemon=True).start()
 
     def _handle_update_result(
-        self, result: dict | None, error: str | None, silent: bool
+        self, result: UpdateInfo | None, error: str | None, silent: bool
     ):
         if result is None:
             if not silent:
@@ -1124,7 +1374,7 @@ class SAPMergerApp:
         ttk.Label(
             frame,
             text="Update Check",
-            font=("Segoe UI", 12, "bold"),
+            font=Typography.CARD_TITLE,
         ).pack(pady=(0, 10))
 
         ttk.Label(
@@ -1150,7 +1400,7 @@ class SAPMergerApp:
             side=tk.LEFT, padx=5
         )
 
-    def _show_update_dialog(self, info: dict):
+    def _show_update_dialog(self, info: UpdateInfo):
         """Show a custom update-available dialog with download button."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Update Available")
@@ -1164,7 +1414,7 @@ class SAPMergerApp:
         frame.pack(fill=tk.BOTH, expand=True)
 
         ttk.Label(
-            frame, text="A new version is available!", font=("Segoe UI", 12, "bold")
+            frame, text="A new version is available!", font=Typography.CARD_TITLE
         ).pack(pady=(0, 10))
 
         versions_frame = ttk.Frame(frame)
@@ -1174,7 +1424,7 @@ class SAPMergerApp:
             side=tk.RIGHT
         )
 
-        if info.get("release_notes"):
+        if info["release_notes"]:
             notes_text = tk.Text(frame, height=6, width=50, wrap=tk.WORD)
             notes_text.configure(state=tk.DISABLED)
             notes_text.pack(pady=10)
@@ -1202,6 +1452,9 @@ class SAPMergerApp:
         )
 
 
+# ─── Update Check ─────────────────────────────────────────────────────────────
+
+
 class UpdateChecker:
     """Checks GitHub for newer releases and reports availability."""
 
@@ -1210,7 +1463,7 @@ class UpdateChecker:
     def __init__(self, current_version: str):
         self.current_version = current_version
 
-    def check(self) -> tuple[dict | None, str | None]:
+    def check(self) -> tuple[UpdateInfo | None, str | None]:
         """Check GitHub releases using the releases/latest redirect.
 
         GET /releases/latest follows the redirect to the actual release page.
@@ -1229,10 +1482,10 @@ class UpdateChecker:
             ssl_context = ssl.create_default_context()
             try:
                 import certifi
-
-                ssl_context.load_verify_locations(certifi.where())
             except ImportError:
-                pass  # Use system certs if certifi not available
+                certifi = None  # No CA bundle bundled: use the system store.
+            if certifi is not None:
+                ssl_context.load_verify_locations(certifi.where())
 
             # Fetch /releases/latest — follows redirect to actual release page
             url = f"{self.GITHUB_RELEASES_PAGE}/latest"
@@ -1253,12 +1506,12 @@ class UpdateChecker:
                 current = tuple(int(x) for x in self.current_version.split("."))
                 latest = tuple(int(x) for x in latest_version.split("."))
                 return (
-                    {
-                        "update_available": latest > current,
-                        "latest_version": latest_version,
-                        "release_url": final_url,
-                        "release_notes": "",
-                    },
+                    UpdateInfo(
+                        update_available=latest > current,
+                        latest_version=latest_version,
+                        release_url=final_url,
+                        release_notes="",
+                    ),
                     None,
                 )
 
@@ -1274,6 +1527,7 @@ class UpdateChecker:
 
 def main():
     """Main entry point."""
+    _enable_dpi_awareness()
     root = tk.Tk()
     SAPMergerApp(root)
     root.mainloop()
